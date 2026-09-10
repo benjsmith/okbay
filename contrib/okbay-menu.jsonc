@@ -1,0 +1,11 @@
+{
+  "Okbay": [
+    { "label": "Atlas",   "action": "omarchy-shell shell summon benjsmith.okbay '{\"surface\":\"atlas\"}'" },
+    { "label": "Reviews", "action": "omarchy-shell shell summon benjsmith.okbay '{\"surface\":\"panel\"}'" },
+    { "label": "Ask",     "action": "okbay ask --prompt" },
+    { "label": "Curate",  "action": "okbay desk start curate" },
+    { "label": "Work",    "action": "okbay desk start work" },
+    { "label": "Code",    "action": "okbay desk start code" },
+    { "label": "Status",  "action": "okbay status" }
+  ]
+}
