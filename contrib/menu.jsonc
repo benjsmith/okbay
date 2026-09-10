@@ -1,0 +1,6 @@
+{
+  "okbay": { "label": "OKBay", "icon": "󰑷" },
+  "okbay.atlas": { "label": "Atlas", "command": ["omarchy-shell", "shell", "summon", "benjsmith.okbay", "{\"surface\":\"atlas\"}"] },
+  "okbay.ingest": { "label": "Ingest clipboard path", "command": ["okbay", "ingest", "--selection"] },
+  "okbay.ask": { "label": "Ask the graph", "command": ["okbay", "ask", "--prompt"] }
+}
