@@ -1,7 +1,6 @@
-# Switchbay theme for Omarchy
-
-Optional desktop theme that ships with okbay. Not required for the plugin.
+# Okbay / Switchbay theme for Omarchy
 
 - `colors.toml` — Switchbay chrome + CE doc-type palette
-- `backgrounds/switchbay-mark.svg` — official Switchbay five-switch app icon (from `benjsmith/switchbay` `frontend/public/icon.svg`)
-- Wallpaper is that mark centered on `#0f1115`. Raster files are generated locally from the SVG.
+- `backgrounds/okbay-logo.svg` — official five-switch mark (from Switchbay `frontend/public/icon.svg`), no wordmark
+- `backgrounds/switchbay-mark.svg` — same mark + lowercase **okbay** wordmark in Inter / `#e6e8eb` on `#0f1115`
+- Raster wallpaper is generated locally from those SVGs
