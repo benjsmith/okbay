@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "benjsmith.okbay",
+  "name": "OKBay",
+  "version": "0.1.0",
+  "author": "benjsmith",
+  "license": "MIT",
+  "description": "Compounding knowledge graph, Atlas overlay, and typed agent desks for Omarchy. Drop files; do not file them.",
+  "tags": ["knowledge-graph", "atlas", "agents", "wiki", "mcp", "desks"],
+  "kinds": ["service", "bar-widget", "overlay", "panel"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml",
+    "overlay": "Overlay.qml",
+    "panel": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "OKBay",
+    "description": "Knowledge graph pulse — pages, pending reviews, seated desk.",
+    "category": "Knowledge",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "staleAfterSec": 240
+    },
+    "schema": [
+      {
+        "key": "staleAfterSec",
+        "type": "integer",
+        "label": "Stale after (seconds)",
+        "min": 60,
+        "max": 900,
+        "step": 30,
+        "defaultValue": 240
+      }
+    ]
+  }
+}

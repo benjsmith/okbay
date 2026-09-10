@@ -1,0 +1,22 @@
+[project]
+name = "okbay"
+version = "0.1.0"
+description = "Compounding knowledge graph and Atlas for Omarchy"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Ben Smith" }]
+dependencies = []
+
+[project.scripts]
+okbay = "okbay.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+okbay = ["static/*"]
