@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/><title>OKBay Atlas</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<style>
+:root{color-scheme:dark;--bg:#0f1115;--bg-soft:#0c0e12;--bg-elev:#161a21;--line:#343942;--text:#e6e8eb;--text-muted:#9aa0a8;--text-faint:#5a6068;--accent:#6be8b3;--halo:#f2f4f6;--type-default:#bbbbbb;--type-missing:#5a6068;}
+*{box-sizing:border-box}body{margin:0;font:14px/1.4 ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+header{display:flex;gap:10px;padding:10px 14px;background:var(--bg-soft);border-bottom:1px solid var(--line);align-items:center}
+input{flex:1;background:var(--bg-elev);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
+input:focus{outline:1px solid var(--accent)}
+#meta{opacity:.7;font-size:12px;white-space:nowrap;color:var(--text-muted)}
+main{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 52px)}
+#list{overflow:auto;border-right:1px solid var(--line);padding:8px;background:var(--bg-soft)}
+.hit{padding:8px;border-radius:6px;cursor:pointer}.hit:hover,.hit.active{background:var(--bg-elev)}
+.k{font-size:11px;color:var(--text-faint);text-transform:uppercase;display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--type-default)}
+#canvas{position:relative;overflow:hidden}svg{width:100%;height:100%}
+line.edge{stroke:var(--line);stroke-opacity:.45;stroke-width:1.2}
+line.edge.focus{stroke:var(--accent);stroke-opacity:.95;stroke-width:2}
+.node circle.body{stroke:var(--bg);stroke-width:1.4}
+.node.hit circle.halo{display:inline;stroke:var(--halo);stroke-width:1.4;stroke-dasharray:3 3;fill:none}
+.node circle.halo{display:none}
+.node.focus circle.body{stroke:var(--accent);stroke-width:2.4}
+.node text{fill:var(--text);font-size:11px}
+</style></head><body>
+<header><strong>OKBay Atlas</strong><input id="q" placeholder="Search nodes and files…" autofocus/><span id="meta"></span></header>
+<main><div id="list"></div><div id="canvas"><svg id="svg"></svg></div></main>
+<script>
+const api=location.origin;let graph={nodes:[],edges:[]},theme={kinds:{},css:{}},hits=[],focusId="";
+function applyTheme(t){theme=t||theme;const css=(t&&t.css)||{};const root=document.documentElement;Object.entries(css).forEach(([k,v])=>root.style.setProperty(k,v));if(t&&t.kinds)Object.entries(t.kinds).forEach(([k,v])=>root.style.setProperty("--type-"+k,v));}
+function kindColor(kind){const k=(kind||"default").toLowerCase();return (theme.kinds&&(theme.kinds[k]||theme.kinds[k.replace(/s$/,"")]))||getComputedStyle(document.documentElement).getPropertyValue("--type-"+k).trim()||"#bbbbbb";}
+async function loadTheme(){try{applyTheme(await(await fetch(api+"/api/theme")).json())}catch(e){}}
+async function load(){await loadTheme();graph=await(await fetch(api+"/graph")).json();const q=new URLSearchParams(location.search).get("q")||"";if(q)document.getElementById("q").value=q;render(q?hitsFrom(q):graph.nodes);draw();document.getElementById("meta").textContent=(graph.nodes||[]).length+" nodes · theme "+(theme.theme||"fallback");if(q)search(q);}
+function hitsFrom(q){const ql=q.toLowerCase();return(graph.nodes||[]).filter(n=>((n.title||"")+" "+(n.id||"")+" "+(n.kind||"")+" "+((n.files||[]).join(" "))).toLowerCase().includes(ql));}
+function escapeHtml(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+function render(nodes){const list=document.getElementById("list");list.innerHTML="";(nodes||[]).forEach(n=>{const el=document.createElement("div");el.className="hit"+(n.id===focusId?" active":"");el.innerHTML="<div>"+escapeHtml(n.title||n.id)+"</div><div class='k'><span class='dot' style='background:"+kindColor(n.kind)+"'></span>"+escapeHtml(n.kind||"")+"</div>";el.onclick=()=>select(n.id);list.appendChild(el);});}
+function select(id){focusId=id;document.querySelectorAll(".node").forEach(n=>n.classList.toggle("focus",n.dataset.id===id));document.querySelectorAll("line.edge").forEach(el=>el.classList.toggle("focus",el.dataset.source===id||el.dataset.target===id));fetch(api+"/locate?q="+encodeURIComponent(id)).catch(()=>{});}
+async function search(q){try{const data=await(await fetch(api+"/atlas/search?q="+encodeURIComponent(q))).json();hits=data.hits||[];}catch(e){hits=hitsFrom(q);}render(hits);const ids=new Set(hits.map(h=>h.id||h.stem));document.querySelectorAll(".node").forEach(n=>n.classList.toggle("hit",ids.has(n.dataset.id)));}
+function draw(){const svg=document.getElementById("svg");const W=svg.clientWidth||800,H=svg.clientHeight||600;const nodes=graph.nodes||[];const N=Math.max(nodes.length,1);nodes.forEach((n,i)=>{const a=(i/N)*Math.PI*2,r=Math.min(W,H)*0.36;n._x=W/2+Math.cos(a)*r;n._y=H/2+Math.sin(a)*r;});const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));let html="";(graph.edges||[]).forEach(e=>{const a=byId[e.source],b=byId[e.target];if(!a||!b)return;html+=`<line class="edge" data-source="${escapeHtml(e.source)}" data-target="${escapeHtml(e.target)}" x1="${a._x}" y1="${a._y}" x2="${b._x}" y2="${b._y}"/>`;});nodes.forEach(n=>{html+=`<g class="node" data-id="${escapeHtml(n.id)}" transform="translate(${n._x},${n._y})"><circle class="halo" r="14"></circle><circle class="body" r="8" fill="${kindColor(n.kind)}"></circle><text x="12" y="4">${escapeHtml((n.title||n.id).slice(0,28))}</text></g>`;});svg.innerHTML=html;svg.querySelectorAll(".node").forEach(el=>el.addEventListener("click",()=>select(el.dataset.id)));}
+document.getElementById("q").addEventListener("input",ev=>{const q=ev.target.value.trim();if(!q){hits=[];render(graph.nodes);return;}search(q);});window.addEventListener("resize",()=>draw());setInterval(loadTheme,4000);load();
+</script></body></html>
