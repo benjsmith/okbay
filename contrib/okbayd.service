@@ -1,0 +1,13 @@
+[Unit]
+Description=Okbay knowledge daemon (Atlas + wiki API on 127.0.0.1:8766)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/okbayd --port 8766
+Restart=on-failure
+RestartSec=3
+Environment=OKBAY_PORT=8766
+
+[Install]
+WantedBy=default.target
