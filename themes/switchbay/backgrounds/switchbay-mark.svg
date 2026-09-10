@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#0f1115"/>
+  <g transform="translate(512,490)">
+    <circle r="240" fill="none" stroke="#6be8b3" stroke-opacity="0.18" stroke-width="3"/>
+    <circle r="170" fill="none" stroke="#6be8b3" stroke-opacity="0.12" stroke-width="2"/>
+    <circle r="18" fill="#6be8b3"/>
+    <g stroke="#6be8b3" stroke-opacity="0.55" stroke-width="3" fill="none">
+      <line x1="0" y1="0" x2="0" y2="-96"/>
+      <line x1="0" y1="0" x2="91.3" y2="-29.7"/>
+      <line x1="0" y1="0" x2="56.4" y2="77.8"/>
+      <line x1="0" y1="0" x2="-56.4" y2="77.8"/>
+      <line x1="0" y1="0" x2="-91.3" y2="-29.7"/>
+    </g>
+    <circle cx="0" cy="-96" r="14" fill="#4d1ae8"/>
+    <circle cx="91.3" cy="-29.7" r="14" fill="#1d6996"/>
+    <circle cx="56.4" cy="77.8" r="14" fill="#38a6a5"/>
+    <circle cx="-56.4" cy="77.8" r="14" fill="#0f8554"/>
+    <circle cx="-91.3" cy="-29.7" r="14" fill="#73af48"/>
+  </g>
+</svg>
