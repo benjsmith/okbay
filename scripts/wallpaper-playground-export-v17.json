@@ -1,0 +1,63 @@
+{
+  "edit_aspect": "16x9",
+  "map_to_square": true,
+  "16x9": {
+    "canvas": {
+      "w": 1920,
+      "h": 1080
+    },
+    "floor_y": 772,
+    "mark": {
+      "x": 713.1307613545827,
+      "y": 211.88867719059346,
+      "scale": 1.6894789590026924,
+      "w": 524,
+      "h": 510
+    },
+    "text": {
+      "x": 686.1448150705942,
+      "y": 625.6786513747807,
+      "scale": 1.898298558335422,
+      "w": 435,
+      "h": 199,
+      "bottom": 825,
+      "font_size_approx": 93
+    },
+    "reflection": {
+      "dy": 0,
+      "intensity": 1,
+      "mode": "dy+intensity_floor_locked"
+    },
+    "glow_scale": 0.2
+  },
+  "square_mapped": {
+    "canvas": {
+      "w": 1280,
+      "h": 1280
+    },
+    "floor_y": 915,
+    "mark": {
+      "x": 315.4831661174669,
+      "y": 225.72256343495917,
+      "scale": 1.6894789590026924,
+      "w": 669,
+      "h": 656
+    },
+    "text": {
+      "x": 368.84261065807647,
+      "y": 765.1683392442105,
+      "scale": 1.898298558335422,
+      "w": 467,
+      "h": 213,
+      "bottom": 978,
+      "font_size_approx": 99
+    },
+    "reflection": {
+      "dy": 0,
+      "intensity": 1,
+      "mode": "dy+intensity_floor_locked"
+    },
+    "glow_scale": 0.2
+  },
+  "bake_note": "Regenerate droplet_reflections from final mark/text; use reflection.dy/intensity as mild offsets only"
+}
