@@ -103,3 +103,7 @@ No JIT tabs. Atlas may be a browser fallback. Rust crate is std HTTP only.
 Cargo target dir on noexec mounts: `CARGO_TARGET_DIR=$HOME/.cache/okbay/target`.
 
 When A-E are green on a live Omarchy session, the next change may remove the README banner. Not before.
+
+## Testing feedback todo
+
+Session follow-ups: [TESTING-FEEDBACK-TODO.md](TESTING-FEEDBACK-TODO.md).
