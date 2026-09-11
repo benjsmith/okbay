@@ -74,7 +74,8 @@ pub fn parse_page(path: &Path) -> Option<Page> {
             let front = parse_front(&raw[4..4 + end]);
             body = raw[4 + end + 4..].trim_start_matches('\n').to_string();
             if let Some(t) = front.get("title") { title = t.clone(); }
-            if let Some(k) = front.get("kind") { kind = k.clone(); }
+            // CE pages often use type:; prefer kind, then type, for Atlas palette fidelity.
+            if let Some(k) = front.get("kind").or_else(|| front.get("type")) { kind = k.clone(); }
             if let Some(s) = front.get("stem") { stem = s.clone(); }
             if let Some(s) = front.get("sources").or_else(|| front.get("extracted_from")) { sources = parse_list(s); }
         }
@@ -115,4 +116,102 @@ pub fn write_page(wiki_dir: &Path, stem: &str, title: &str, body: &str, kind: &s
     text.push('\n');
     let _ = fs::write(&path, text);
     parse_page(&path).unwrap_or(Page { stem, path, title: title.to_string(), kind: kind.to_string(), body: body.to_string(), links: vec![], sources: sources.to_vec() })
+}
+
+
+/// Slice 2: lazy atlas page payload (markdown + minimal HTML).
+pub fn markdown_to_html(md: &str) -> String {
+    if md.is_empty() { return String::new(); }
+    fn esc(s: &str) -> String {
+        s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    }
+    fn format_inline(raw: &str) -> String {
+        // Very small: escape, then wikilinks, bold, italic, code.
+        let mut out = String::new();
+        let bytes = raw.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if i + 1 < bytes.len() && bytes[i] == b'[' && bytes[i + 1] == b'[' {
+                if let Some(rel) = raw[i + 2..].find("]]") {
+                    let inner = &raw[i + 2..i + 2 + rel];
+                    let mut parts = inner.splitn(2, '|');
+                    let target = parts.next().unwrap_or("").split('#').next().unwrap_or("").trim();
+                    let label = parts.next().unwrap_or(target).trim();
+                    let tid = esc(target);
+                    out.push_str(&format!(
+                        "<a class=\"wikilink\" data-page=\"{tid}\" href=\"#page={tid}\">{}</a>",
+                        esc(if label.is_empty() { target } else { label })
+                    ));
+                    i += 4 + rel;
+                    continue;
+                }
+            }
+            if bytes[i] == b'`' {
+                if let Some(rel) = raw[i + 1..].find('`') {
+                    out.push_str(&format!("<code>{}</code>", esc(&raw[i + 1..i + 1 + rel])));
+                    i += 2 + rel;
+                    continue;
+                }
+            }
+            if i + 1 < bytes.len() && bytes[i] == b'*' && bytes[i + 1] == b'*' {
+                if let Some(rel) = raw[i + 2..].find("**") {
+                    out.push_str(&format!("<strong>{}</strong>", esc(&raw[i + 2..i + 2 + rel])));
+                    i += 4 + rel;
+                    continue;
+                }
+            }
+            // single char escape
+            match bytes[i] as char {
+                '&' => out.push_str("&amp;"),
+                '<' => out.push_str("&lt;"),
+                '>' => out.push_str("&gt;"),
+                '"' => out.push_str("&quot;"),
+                c => out.push(c),
+            }
+            i += 1;
+        }
+        out
+    }
+    let mut out = String::new();
+    let mut in_ul = false;
+    for line in md.replace("\r\n", "\n").lines() {
+        let stripped = line.trim();
+        if stripped.is_empty() {
+            if in_ul { out.push_str("</ul>"); in_ul = false; }
+            continue;
+        }
+        if stripped.starts_with('#') {
+            if in_ul { out.push_str("</ul>"); in_ul = false; }
+            let level = stripped.chars().take_while(|c| *c == '#').count().clamp(1, 4);
+            let content = stripped[level..].trim();
+            out.push_str(&format!("<h{level}>{}</h{level}>", format_inline(content)));
+            continue;
+        }
+        if stripped.starts_with("- ") || stripped.starts_with("* ") {
+            if !in_ul { out.push_str("<ul>"); in_ul = true; }
+            out.push_str(&format!("<li>{}</li>", format_inline(stripped[2..].trim())));
+            continue;
+        }
+        if in_ul { out.push_str("</ul>"); in_ul = false; }
+        out.push_str(&format!("<p>{}</p>", format_inline(stripped)));
+    }
+    if in_ul { out.push_str("</ul>"); }
+    out
+}
+
+pub fn page_payload(wiki_dir: &Path, stem: &str) -> Option<serde_json::Value> {
+    let page = get_page(wiki_dir, stem)?;
+    let sources = page.sources.clone();
+    Some(serde_json::json!({
+        "id": page.stem,
+        "stem": page.stem,
+        "title": page.title,
+        "type": page.kind,
+        "kind": page.kind,
+        "path": page.path.to_string_lossy(),
+        "properties": { "sources": sources },
+        "sources": page.sources,
+        "markdown": page.body,
+        "body_html": markdown_to_html(&page.body),
+    }))
 }

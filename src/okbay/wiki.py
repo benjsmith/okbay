@@ -54,7 +54,8 @@ def parse_page(path: Path) -> Page | None:
         front = _parse_front(m.group(1))
         body = raw[m.end():]
         title = str(front.get("title") or title)
-        kind = str(front.get("kind") or kind)
+        # CE pages often use type:; prefer kind, then type, for Atlas palette fidelity.
+        kind = str(front.get("kind") or front.get("type") or kind)
         stem = str(front.get("stem") or stem)
     links = [g.strip() for g in WIKILINK.findall(body)]
     sources = front.get("sources") or front.get("extracted_from") or []
@@ -152,3 +153,140 @@ def neighbors(stem: str) -> dict:
         if e.get("target") == stem:
             incoming.append(e)
     return {"stem": stem, "outgoing": outgoing, "incoming": incoming}
+
+
+# ── Slice 2: lazy atlas page payload (do not embed bodies in /api/atlas/data) ─
+
+_WIKILINK_MD = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]")
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+_MD_CODE = re.compile(r"`([^`]+)`")
+_MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
+
+def _html_escape(s: str) -> str:
+    return (
+        str(s)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def markdown_to_html(md: str) -> str:
+    """Minimal markdown→HTML for the slim atlas modal (no external deps)."""
+    if not md:
+        return ""
+
+    def format_inline(raw: str) -> str:
+        tokens: list[str] = []
+
+        def protect(pattern: re.Pattern, repl_fn, s: str) -> str:
+            out: list[str] = []
+            last = 0
+            for m in pattern.finditer(s):
+                out.append(s[last : m.start()])
+                ph = f"\x00{len(tokens)}\x00"
+                tokens.append(repl_fn(m))
+                out.append(ph)
+                last = m.end()
+            out.append(s[last:])
+            return "".join(out)
+
+        s = protect(
+            _WIKILINK_MD,
+            lambda m: (
+                f'<a class="wikilink" data-page="{_html_escape(m.group(1).strip())}" '
+                f'href="#page={_html_escape(m.group(1).strip())}">'
+                f"{_html_escape((m.group(2) or m.group(1)).strip())}</a>"
+            ),
+            raw,
+        )
+        s = protect(
+            _MD_LINK,
+            lambda m: f'<a href="{_html_escape(m.group(2))}">{_html_escape(m.group(1))}</a>',
+            s,
+        )
+        s = protect(_MD_CODE, lambda m: f"<code>{_html_escape(m.group(1))}</code>", s)
+        s = _html_escape(s)
+        for i, tok in enumerate(tokens):
+            s = s.replace(f"\x00{i}\x00", tok)
+        s = _MD_BOLD.sub(r"<strong>\1</strong>", s)
+        s = _MD_ITALIC.sub(r"<em>\1</em>", s)
+        return s
+
+    lines = md.replace("\r\n", "\n").split("\n")
+    out: list[str] = []
+    in_ul = False
+    in_code = False
+    code_buf: list[str] = []
+
+    def flush_ul() -> None:
+        nonlocal in_ul
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            if in_code:
+                out.append("<pre><code>" + _html_escape("\n".join(code_buf)) + "</code></pre>")
+                code_buf = []
+                in_code = False
+            else:
+                flush_ul()
+                in_code = True
+            continue
+        if in_code:
+            code_buf.append(line)
+            continue
+        stripped = line.strip()
+        if not stripped:
+            flush_ul()
+            continue
+        if stripped.startswith("#"):
+            flush_ul()
+            level = len(stripped) - len(stripped.lstrip("#"))
+            level = min(max(level, 1), 4)
+            content = stripped[level:].strip()
+            out.append(f"<h{level}>{format_inline(content)}</h{level}>")
+            continue
+        if stripped.startswith(("- ", "* ")):
+            if not in_ul:
+                out.append("<ul>")
+                in_ul = True
+            out.append(f"<li>{format_inline(stripped[2:].strip())}</li>")
+            continue
+        flush_ul()
+        out.append(f"<p>{format_inline(stripped)}</p>")
+    flush_ul()
+    if in_code:
+        out.append("<pre><code>" + _html_escape("\n".join(code_buf)) + "</code></pre>")
+    return "\n".join(out)
+
+
+def page_payload(stem: str, wiki_dir: Path | None = None) -> dict | None:
+    """Lazy page doc for the atlas modal. Returns None if not found."""
+    page = get_page(stem, wiki_dir=wiki_dir)
+    if page is None:
+        return None
+    sources = list(page.sources or [])
+    props: dict = {"sources": sources}
+    for k, v in (page.front or {}).items():
+        if k in ("stem", "title", "kind", "type", "sources", "extracted_from"):
+            continue
+        props[k] = v
+    ntype = str(page.front.get("type") or page.kind or "note")
+    return {
+        "id": page.stem,
+        "stem": page.stem,
+        "title": page.title,
+        "type": ntype,
+        "kind": page.kind,
+        "path": str(page.path),
+        "properties": props,
+        "sources": sources,
+        "markdown": page.body,
+        "body_html": markdown_to_html(page.body),
+    }

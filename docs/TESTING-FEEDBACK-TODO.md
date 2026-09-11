@@ -17,12 +17,33 @@ Update checkboxes as items land. Do **not** lift the README under-construction b
 
 ## Open — product / UX
 
-### Atlas surface (priority after wallpaper)
+### Atlas surface (CE parity via option 3)
 
-- [ ] **Ship fullscreen Quickshell overlay + embedded WebView** hosting `/atlas` (preferred near-term path). Overlay today is chrome-only and falls back to a Chromium window.
-- [ ] Replace naive circle layout in `src/okbay/static/atlas.html` with a real force-directed (or better) graph renderer that stays usable at ~40k nodes (LOD / sampling / clustering as needed).
-- [ ] Confirm bar chip visually: left-click Atlas, right-click Reviews; dismiss first-run toasts if they obscure the bar.
-- [ ] Later: evaluate native QML Atlas if WebView feel is still wrong; kiosk Chromium only as stopgap.
+Strategy locked 2026-09-11: **freeze option 1** (Quickshell + Qt WebEngine — crashes on this guest).
+Ship **CE Atlas viewer parity** hosted as **option 3** (frameless Chromium `--app=` / Hyprland kiosk).
+Native QML (option 2) only after CE parity.
+
+Minimum = CE look/feel/performance: log-space shells/border, fast Fuse search, wiki + source browsers, file highlighting.
+Stretch = Omarchy uplifts (Switchbay theme, bar summon, `okbay locate`, optional native file browser).
+
+- [x] CE Atlas audit → `docs/CE-ATLAS-PARITY-AUDIT.md` (knowledge-atlas + wiki-view + data contract)
+- [x] Okbayd data bridge: `GET /api/atlas/data` → CEData (`atlas_ce` Py+Rust); see `CE-ATLAS-PARITY-AUDIT.md` §7 Slice 0
+- [x] Parity A — canvas mount: KnowledgeAtlas hybrid + **CE Policy A** (`maxAggregates:0`, `coreCapacity=corpusSize`); vendor JS on `/atlas` (2026-09-11 aggregate/minimap fix; Biocure visual confirm via screenshot)
+- [x] Parity B — chrome: Fuse search, slim wiki/source modal, in-atlas focus (`atlas-chrome.js`; see audit §7 Slice 2)
+- [ ] Option 3 packaging: frameless Chromium / special workspace; bar left-click opens Atlas
+- [x] File highlight via `okbay locate` — modal **Reveal files**, resolve-only on open (`reveal=0`), toast + sources/files list
+      (Omarchy-native browser stretch still open)
+- [x] Label option buttons + type popup (CE `initAtlasControls` slim port in atlas chrome)
+- [x] Label/type controls **visibly** mounted bottom-left after KnowledgeAtlas.mount (was top-right low-contrast; screenshots missed them)
+- [x] Sidebar expand/collapse-all (CE `sidebar-toggle-all` chevron)
+- [x] Fuse search → graph highlight via `engine.select` + `engine.focus` (typing + row select)
+- [x] Classic graph chooser gated: `MIN_ATLAS_PAGES≈360` — Biocure Atlas-only; `#viewer-mode` stays hidden
+- [ ] Confirm bar chip visually: left-click Atlas, right-click Reviews
+- [ ] Later only: native QML Scene Graph if kiosk still feels non-Omarchy
+- [x] Interim: Chromium `--app=/atlas` opener (now CE KnowledgeAtlas host; SVG circle removed)
+- [x] Slice 1: vendor `knowledge-atlas.js` + mount against `/api/atlas/data` (see `CE-ATLAS-PARITY-AUDIT.md` §7)
+- [x] Slice 2: Fuse sidebar + slim wiki modal + focus/locate (`atlas-chrome.js`, `GET /api/atlas/page`)
+- [x] Slice 2+: type coloring (full palette), label/type controls, richer locate UX (2026-09-11)
 
 ### Theme / wallpaper
 
@@ -31,7 +52,8 @@ Update checkboxes as items land. Do **not** lift the README under-construction b
 
 ### Graph / CE corpus fidelity
 
-- [ ] Map Curiosity Engine frontmatter `type:` → okbay `kind:` so Atlas node colors use the Switchbay CE palette (pages currently default to `note`).
+- [x] Map Curiosity Engine frontmatter `type:` → okbay `kind:` so Atlas node colors use the Switchbay CE palette
+      (`wiki.parse` folds `type:`→kind; `okbay graph rebuild` / `enrich-kinds`; Rust theme full Switchbay palette).
 - [ ] Verify edge semantics vs CE Kuzu graph (okbay builds from `[[wikilinks]]`; CE may count additional edge kinds).
 - [ ] Atlas performance / pagination for full Biocure (~40k nodes) — `/graph` is a large JSON payload.
 
@@ -54,4 +76,4 @@ Track against `docs/E2E-HANDOVER.md`:
 ## Explicitly not yet
 
 - Removing the README under-construction banner
-- Declaring Atlas “beautiful fullscreen app” done (needs WebView overlay + renderer work)
+- Declaring Atlas “beautiful fullscreen app” done (needs CE Atlas parity + option 3 packaging)

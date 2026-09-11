@@ -19,6 +19,9 @@ def main(argv=None):
     rva = sub.add_parser("review"); rva.add_argument("action"); rva.add_argument("id")
     ds = sub.add_parser("desk"); dsub = ds.add_subparsers(dest="desk_cmd"); st = dsub.add_parser("start"); st.add_argument("kind"); st.add_argument("objective", nargs="?")
     sv = sub.add_parser("serve"); sv.add_argument("--host", default="127.0.0.1"); sv.add_argument("--port", type=int, default=8766)
+    gr = sub.add_parser("graph"); grsub = gr.add_subparsers(dest="graph_cmd", required=True)
+    grsub.add_parser("rebuild", help="Rebuild graph.json from wiki (folds type:→kind)")
+    grsub.add_parser("enrich-kinds", help="Patch kinds from wiki type: without full rebuild")
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
@@ -52,4 +55,12 @@ def main(argv=None):
     if args.cmd == "serve":
         from . import server
         return server.serve(args.host, args.port)
+    if args.cmd == "graph":
+        if args.graph_cmd == "rebuild":
+            from . import graph
+            data = graph.rebuild()
+            return _print({"ok": True, "pages": data.get("pages"), "nodes": len(data.get("nodes") or []), "links": data.get("links")})
+        if args.graph_cmd == "enrich-kinds":
+            from . import atlas_ce
+            return _print(atlas_ce.enrich_graph_kinds())
     return 1

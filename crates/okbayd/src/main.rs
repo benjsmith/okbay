@@ -1,4 +1,5 @@
 //! OKBay warm daemon. Same HTTP contract as `python -m okbay serve`.
+mod atlas_ce;
 mod desks;
 mod graph;
 mod http;
