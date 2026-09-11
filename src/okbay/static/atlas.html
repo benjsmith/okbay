@@ -1,41 +1,584 @@
 <!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/><title>OKBay Atlas</title>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<title>OKBay Atlas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!--
+  Slice 2+ — CE KnowledgeAtlas + chrome (Fuse, labels/types, slim modal, locate/reveal).
+  Canvas: hybrid / CE wiki-view Policy A (individual nodes, maxAggregates:0).
+  See CE-ATLAS-PARITY-AUDIT §7 / §8.
+-->
 <style>
-:root{color-scheme:dark;--bg:#0f1115;--bg-soft:#0c0e12;--bg-elev:#161a21;--line:#343942;--text:#e6e8eb;--text-muted:#9aa0a8;--text-faint:#5a6068;--accent:#6be8b3;--halo:#f2f4f6;--type-default:#bbbbbb;--type-missing:#5a6068;}
-*{box-sizing:border-box}body{margin:0;font:14px/1.4 ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:var(--text)}
-header{display:flex;gap:10px;padding:10px 14px;background:var(--bg-soft);border-bottom:1px solid var(--line);align-items:center}
-input{flex:1;background:var(--bg-elev);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
-input:focus{outline:1px solid var(--accent)}
-#meta{opacity:.7;font-size:12px;white-space:nowrap;color:var(--text-muted)}
-main{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 52px)}
-#list{overflow:auto;border-right:1px solid var(--line);padding:8px;background:var(--bg-soft)}
-.hit{padding:8px;border-radius:6px;cursor:pointer}.hit:hover,.hit.active{background:var(--bg-elev)}
-.k{font-size:11px;color:var(--text-faint);text-transform:uppercase;display:flex;gap:6px;align-items:center}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--type-default)}
-#canvas{position:relative;overflow:hidden}svg{width:100%;height:100%}
-line.edge{stroke:var(--line);stroke-opacity:.45;stroke-width:1.2}
-line.edge.focus{stroke:var(--accent);stroke-opacity:.95;stroke-width:2}
-.node circle.body{stroke:var(--bg);stroke-width:1.4}
-.node.hit circle.halo{display:inline;stroke:var(--halo);stroke-width:1.4;stroke-dasharray:3 3;fill:none}
-.node circle.halo{display:none}
-.node.focus circle.body{stroke:var(--accent);stroke-width:2.4}
-.node text{fill:var(--text);font-size:11px}
-</style></head><body>
-<header><strong>OKBay Atlas</strong><input id="q" placeholder="Search nodes and files…" autofocus/><span id="meta"></span></header>
-<main><div id="list"></div><div id="canvas"><svg id="svg"></svg></div></main>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1115;
+    --bg-soft: #0c0e12;
+    --bg-elev: #161a22;
+    --text: #e6e8eb;
+    --text-muted: #9aa0a8;
+    --text-faint: #6b7280;
+    --accent: #6be8b3;
+    --line: #343942;
+    --sidebar-w: 280px;
+  }
+  html[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f4f5f7;
+    --bg-soft: #ebecee;
+    --bg-elev: #ffffff;
+    --text: #1a1d24;
+    --text-muted: #5c6370;
+    --text-faint: #8b929e;
+    --accent: #0d9f6e;
+    --line: #d0d4db;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  }
+  #app { display: flex; width: 100%; height: 100%; }
+  #sidebar {
+    flex: 0 0 var(--sidebar-w); width: var(--sidebar-w);
+    display: flex; flex-direction: column;
+    background: var(--bg-soft); border-right: 1px solid var(--line);
+    z-index: 3; min-height: 0;
+  }
+  #sidebar-header {
+    padding: 10px 12px 8px; border-bottom: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #sidebar-header .brand {
+    font-weight: 600; letter-spacing: 0.02em; color: var(--text);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  #meta-counts { color: var(--text-muted); font-size: 11px; font-weight: 400; }
+  #sidebar-search {
+    width: 100%; padding: 7px 10px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    outline: none;
+  }
+  #sidebar-search:focus { border-color: var(--accent); }
+
+  .sidebar-search-wrap {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .sidebar-search-wrap #sidebar-search { flex: 1; min-width: 0; }
+  .icon-btn {
+    flex: 0 0 auto; width: 30px; height: 30px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 7px;
+    background: var(--bg-elev); color: var(--text-muted); cursor: pointer;
+  }
+  .icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .sidebar-toggle-all { color: var(--text-muted); }
+
+  #sidebar-list {
+    flex: 1; overflow: auto; padding: 6px 0 16px;
+  }
+  .sidebar-empty { padding: 16px 14px; color: var(--text-faint); }
+  .type-group-header {
+    width: 100%; display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border: 0; background: transparent; color: var(--text-muted);
+    cursor: pointer; font: inherit; text-align: left;
+  }
+  .type-group-header:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .group-chev { display: inline-block; width: 12px; transition: transform 0.12s; font-size: 10px; }
+  .type-group[data-collapsed="true"] .group-chev { transform: rotate(0deg); }
+  .type-group:not([data-collapsed="true"]) .group-chev { transform: rotate(90deg); }
+  .type-group[data-collapsed="true"] .type-group-body { display: none; }
+  .type-group-name { flex: 1; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .type-group-count { font-size: 11px; color: var(--text-faint); }
+  .sidebar-row {
+    width: 100%; display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px 5px 22px; border: 0; background: transparent; color: var(--text);
+    cursor: pointer; font: inherit; text-align: left;
+  }
+  .sidebar-row:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .sidebar-row[data-active="true"] {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
+  }
+  .row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
+    background: var(--dot-default, var(--text-faint));
+  }
+
+  #graph-pane { flex: 1; position: relative; min-width: 0; min-height: 0; }
+  #status {
+    position: absolute; z-index: 2; top: 10px; left: 12px;
+    padding: 6px 10px; border-radius: 6px;
+    background: color-mix(in srgb, var(--bg-soft) 88%, transparent);
+    border: 1px solid var(--line); color: var(--text-muted);
+    pointer-events: none; max-width: min(70vw, 42rem);
+  }
+  #status.error { color: #cc503e; border-color: #cc503e; }
+  #graph {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    background: var(--bg);
+    touch-action: none;
+  }
+
+  #modal-backdrop {
+    position: fixed; inset: 0; z-index: 40;
+    background: rgba(0,0,0,0.45);
+  }
+  #modal {
+    position: fixed; z-index: 50;
+    top: 8%; left: 50%; transform: translateX(-50%);
+    width: min(720px, 92vw); max-height: 84vh;
+    background: var(--bg-elev); color: var(--text);
+    border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .hidden { display: none !important; }
+  .modal-chrome {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
+  }
+  .modal-chrome h2 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+  #modal-meta { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); word-break: break-all; }
+  #modal-close {
+    border: 1px solid var(--line); background: transparent; color: var(--text-muted);
+    border-radius: 6px; width: 28px; height: 28px; cursor: pointer; font-size: 16px;
+  }
+  #modal-close:hover { color: var(--text); border-color: var(--accent); }
+  .modal-scroll { overflow: auto; padding: 12px 16px 20px; }
+  #modal-properties { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12px; }
+  #modal-properties td { padding: 3px 0; vertical-align: top; }
+  .prop-key { width: 7rem; color: var(--text-muted); padding-right: 10px !important; }
+  .prop-val { color: var(--text); word-break: break-word; }
+  .faint { color: var(--text-faint); }
+  #modal-sources { margin-bottom: 14px; font-size: 12px; }
+  #modal-sources .sources-label {
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    font-size: 11px; color: var(--text-muted); margin-bottom: 4px;
+  }
+  #modal-sources ul { margin: 0; padding-left: 1.1rem; color: var(--text); }
+  #modal-body { font-size: 13px; line-height: 1.55; }
+  #modal-body h1, #modal-body h2, #modal-body h3, #modal-body h4 { margin: 0.8em 0 0.35em; }
+  #modal-body p { margin: 0.45em 0; }
+  #modal-body a.wikilink { color: var(--accent); text-decoration: none; }
+  #modal-body a.wikilink:hover { text-decoration: underline; }
+  #modal-body code, #modal-body pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  }
+  #modal-body pre {
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: 6px; padding: 10px; overflow: auto;
+  }
+  .modal-loading, .modal-empty { color: var(--text-faint); }
+  .md-raw { white-space: pre-wrap; }
+  body[data-sidebar="collapsed"] #sidebar { display: none; }
+
+  .dot[data-type="project"] { background: var(--dot-project, #4d1ae8); }
+  .dot[data-type="analysis"] { background: var(--dot-analysis, #1d6996); }
+  .dot[data-type="concept"] { background: var(--dot-concept, #38a6a5); }
+  .dot[data-type="entity"] { background: var(--dot-entity, #0f8554); }
+  .dot[data-type="evidence"] { background: var(--dot-evidence, #73af48); }
+  .dot[data-type="fact"] { background: var(--dot-fact, #edad08); }
+  .dot[data-type="figure"] { background: var(--dot-figure, #e17c05); }
+  .dot[data-type="table"] { background: var(--dot-table, #cc503e); }
+  .dot[data-type="source"] { background: var(--dot-source, #94346e); }
+  .dot[data-type="note"] { background: var(--dot-note, #6f4070); }
+  .dot[data-type="todo-list"], .dot[data-type="todo"] { background: var(--dot-todo-list, #9656a2); }
+  .dot[data-type="hub"] { background: var(--dot-hub, #6be8b3); }
+  .dot[data-type="missing"] { background: var(--dot-missing, #5a6068); }
+  .dot[data-type="unclassified"] { background: var(--dot-unclassified, #ffffff); border: 1px solid var(--line); }
+
+  /* CE parity: bottom-left above canvas; high contrast so Chromium --app
+     and dense graphs never hide the buttons. z-index above #graph (auto)
+     and atlas-minimap (z-index:4 inside #graph). */
+  .graph-controls {
+    position: absolute; z-index: 20; bottom: 14px; left: 14px;
+    display: flex; gap: 8px; align-items: flex-end;
+    pointer-events: auto;
+  }
+  .ctrl-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg-elev);
+    color: var(--text); border-radius: 8px; padding: 7px 12px; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 500;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+  }
+  .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .ctrl-label { color: var(--text-muted); font-weight: 400; }
+  #label-mode-state, #label-types-state, #viewer-mode-state {
+    color: var(--accent); font-weight: 600;
+  }
+  .label-types-panel {
+    position: absolute; bottom: 44px; left: 0; z-index: 21;
+    width: 220px; padding: 10px; border-radius: 8px;
+    background: var(--bg-elev); border: 1px solid var(--line);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+  }
+  body[data-modal="open"] .graph-controls { opacity: 0.55; }
+  .label-types-head { font-weight: 600; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 6px; }
+  .label-types-row {
+    display: flex; align-items: center; gap: 8px; padding: 3px 0;
+    cursor: pointer; font-size: 12px;
+  }
+  .label-types-row input { margin: 0; }
+  .settings-reset {
+    margin-top: 8px; width: 100%; border: 1px solid var(--line);
+    background: transparent; color: var(--text-muted); border-radius: 6px;
+    padding: 5px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .settings-reset:hover { color: var(--accent); border-color: var(--accent); }
+  .modal-actions {
+    display: flex; gap: 8px; align-items: center; padding: 0 16px 8px;
+  }
+  .modal-action-btn {
+    border: 1px solid var(--line); background: transparent; color: var(--text);
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .modal-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #modal-locate-status {
+    margin: 0 16px 10px; padding: 6px 10px; border-radius: 6px;
+    background: var(--bg-soft); border: 1px solid var(--line);
+    font-size: 11px; color: var(--text-muted); word-break: break-all;
+  }
+  #modal-locate-status.error { color: #cc503e; border-color: #cc503e; }
+  #status.focus-toast {
+    color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar" aria-label="Atlas search">
+    <div id="sidebar-header">
+      <div class="brand">
+        <span>OKBay Atlas</span>
+        <span id="meta-counts"></span>
+      </div>
+      <div class="sidebar-search-wrap">
+        <input id="sidebar-search" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false"/>
+        <button id="sidebar-toggle-all" class="icon-btn sidebar-toggle-all" type="button"
+          data-action="toggle-all-groups" title="Collapse or expand all page types"
+          aria-label="Collapse or expand all page types">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6 L8 2.5 L13 6"/>
+            <path d="M3 10 L8 13.5 L13 10"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="sidebar-list" role="listbox"></div>
+  </aside>
+  <div id="graph-pane">
+    <div id="status">Loading atlas…</div>
+    <div id="graph" aria-label="Knowledge Atlas canvas"></div>
+    <!-- Controls AFTER #graph (CE DOM order) so they stack above the canvas.
+         Classic/Atlas chooser stays hidden when corpus > MIN_ATLAS_PAGES (360). -->
+    <div class="graph-controls" id="graph-controls" aria-label="Atlas label controls">
+      <button id="viewer-mode" class="ctrl-btn hidden" type="button" title="Switch graph viewer" aria-label="Switch graph viewer" hidden>
+        <span class="ctrl-label">view:</span><span id="viewer-mode-state">atlas</span>
+      </button>
+      <button id="label-mode" class="ctrl-btn" type="button" title="Label visibility" aria-label="Label visibility">
+        <span class="ctrl-label">labels:</span><span id="label-mode-state">auto</span>
+      </button>
+      <button id="label-types" class="ctrl-btn" type="button" title="Which page types show labels" aria-label="Which page types show labels">
+        <span class="ctrl-label">types:</span><span id="label-types-state">4/12</span>
+      </button>
+      <div id="label-types-panel" class="label-types-panel hidden" role="dialog" aria-label="Label types">
+        <div class="label-types-head">Show labels for</div>
+        <label class="label-types-row" data-type="project"><input type="checkbox"><span class="dot" data-type="project"></span><span>Projects</span></label>
+        <label class="label-types-row" data-type="analysis"><input type="checkbox"><span class="dot" data-type="analysis"></span><span>Analyses</span></label>
+        <label class="label-types-row" data-type="concept"><input type="checkbox"><span class="dot" data-type="concept"></span><span>Concepts</span></label>
+        <label class="label-types-row" data-type="entity"><input type="checkbox"><span class="dot" data-type="entity"></span><span>Entities</span></label>
+        <label class="label-types-row" data-type="evidence"><input type="checkbox"><span class="dot" data-type="evidence"></span><span>Evidence</span></label>
+        <label class="label-types-row" data-type="fact"><input type="checkbox"><span class="dot" data-type="fact"></span><span>Facts</span></label>
+        <label class="label-types-row" data-type="figure"><input type="checkbox"><span class="dot" data-type="figure"></span><span>Figures</span></label>
+        <label class="label-types-row" data-type="table"><input type="checkbox"><span class="dot" data-type="table"></span><span>Tables</span></label>
+        <label class="label-types-row" data-type="source"><input type="checkbox"><span class="dot" data-type="source"></span><span>Sources</span></label>
+        <label class="label-types-row" data-type="note"><input type="checkbox"><span class="dot" data-type="note"></span><span>Notes</span></label>
+        <label class="label-types-row" data-type="todo-list"><input type="checkbox"><span class="dot" data-type="todo-list"></span><span>Todos</span></label>
+        <label class="label-types-row" data-type="unclassified"><input type="checkbox"><span class="dot" data-type="unclassified"></span><span>Unclassified</span></label>
+        <button id="label-types-reset" class="settings-reset" type="button">Reset</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="modal-backdrop" class="hidden" aria-hidden="true"></div>
+<div id="modal" class="hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="modal-title">
+  <div class="modal-chrome">
+    <div style="flex:1;min-width:0">
+      <h2 id="modal-title">Page</h2>
+      <div id="modal-meta"></div>
+    </div>
+    <button id="modal-close" type="button" title="Close (Esc)" aria-label="Close">×</button>
+  </div>
+  <div class="modal-actions">
+    <button id="modal-reveal" class="modal-action-btn" type="button" title="Reveal wiki/vault files in file manager">Reveal files</button>
+  </div>
+  <div id="modal-locate-status" class="hidden" role="status"></div>
+  <div class="modal-scroll">
+    <table id="modal-properties"></table>
+    <div id="modal-sources" class="hidden"></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+<script src="/static/vendor/knowledge-atlas.js"></script>
+<script src="/static/vendor/fuse.min.js"></script>
+<script src="/static/atlas-keys-helpers.js"></script>
+<script src="/static/atlas-chrome.js"></script>
 <script>
-const api=location.origin;let graph={nodes:[],edges:[]},theme={kinds:{},css:{}},hits=[],focusId="";
-function applyTheme(t){theme=t||theme;const css=(t&&t.css)||{};const root=document.documentElement;Object.entries(css).forEach(([k,v])=>root.style.setProperty(k,v));if(t&&t.kinds)Object.entries(t.kinds).forEach(([k,v])=>root.style.setProperty("--type-"+k,v));}
-function kindColor(kind){const k=(kind||"default").toLowerCase();return (theme.kinds&&(theme.kinds[k]||theme.kinds[k.replace(/s$/,"")]))||getComputedStyle(document.documentElement).getPropertyValue("--type-"+k).trim()||"#bbbbbb";}
-async function loadTheme(){try{applyTheme(await(await fetch(api+"/api/theme")).json())}catch(e){}}
-async function load(){await loadTheme();graph=await(await fetch(api+"/graph")).json();const q=new URLSearchParams(location.search).get("q")||"";if(q)document.getElementById("q").value=q;render(q?hitsFrom(q):graph.nodes);draw();document.getElementById("meta").textContent=(graph.nodes||[]).length+" nodes · theme "+(theme.theme||"fallback");if(q)search(q);}
-function hitsFrom(q){const ql=q.toLowerCase();return(graph.nodes||[]).filter(n=>((n.title||"")+" "+(n.id||"")+" "+(n.kind||"")+" "+((n.files||[]).join(" "))).toLowerCase().includes(ql));}
-function escapeHtml(s){return String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
-function render(nodes){const list=document.getElementById("list");list.innerHTML="";(nodes||[]).forEach(n=>{const el=document.createElement("div");el.className="hit"+(n.id===focusId?" active":"");el.innerHTML="<div>"+escapeHtml(n.title||n.id)+"</div><div class='k'><span class='dot' style='background:"+kindColor(n.kind)+"'></span>"+escapeHtml(n.kind||"")+"</div>";el.onclick=()=>select(n.id);list.appendChild(el);});}
-function select(id){focusId=id;document.querySelectorAll(".node").forEach(n=>n.classList.toggle("focus",n.dataset.id===id));document.querySelectorAll("line.edge").forEach(el=>el.classList.toggle("focus",el.dataset.source===id||el.dataset.target===id));fetch(api+"/locate?q="+encodeURIComponent(id)).catch(()=>{});}
-async function search(q){try{const data=await(await fetch(api+"/atlas/search?q="+encodeURIComponent(q))).json();hits=data.hits||[];}catch(e){hits=hitsFrom(q);}render(hits);const ids=new Set(hits.map(h=>h.id||h.stem));document.querySelectorAll(".node").forEach(n=>n.classList.toggle("hit",ids.has(n.dataset.id)));}
-function draw(){const svg=document.getElementById("svg");const W=svg.clientWidth||800,H=svg.clientHeight||600;const nodes=graph.nodes||[];const N=Math.max(nodes.length,1);nodes.forEach((n,i)=>{const a=(i/N)*Math.PI*2,r=Math.min(W,H)*0.36;n._x=W/2+Math.cos(a)*r;n._y=H/2+Math.sin(a)*r;});const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));let html="";(graph.edges||[]).forEach(e=>{const a=byId[e.source],b=byId[e.target];if(!a||!b)return;html+=`<line class="edge" data-source="${escapeHtml(e.source)}" data-target="${escapeHtml(e.target)}" x1="${a._x}" y1="${a._y}" x2="${b._x}" y2="${b._y}"/>`;});nodes.forEach(n=>{html+=`<g class="node" data-id="${escapeHtml(n.id)}" transform="translate(${n._x},${n._y})"><circle class="halo" r="14"></circle><circle class="body" r="8" fill="${kindColor(n.kind)}"></circle><text x="12" y="4">${escapeHtml((n.title||n.id).slice(0,28))}</text></g>`;});svg.innerHTML=html;svg.querySelectorAll(".node").forEach(el=>el.addEventListener("click",()=>select(el.dataset.id)));}
-document.getElementById("q").addEventListener("input",ev=>{const q=ev.target.value.trim();if(!q){hits=[];render(graph.nodes);return;}search(q);});window.addEventListener("resize",()=>draw());setInterval(loadTheme,4000);load();
-</script></body></html>
+(function () {
+  'use strict';
+  var api = location.origin;
+  var statusEl = document.getElementById('status');
+  var graphEl = document.getElementById('graph');
+  var handle = null;
+  var ceData = null;
+
+  function setStatus(msg, isError) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || '';
+    statusEl.classList.toggle('error', !!isError);
+    statusEl.style.display = msg ? '' : 'none';
+  }
+
+  function applyTheme(t) {
+    if (!t) return;
+    var root = document.documentElement;
+    var chrome = t.chrome || {};
+    root.dataset.theme = t.mode === 'light' ? 'light' : 'dark';
+    if (chrome.background) {
+      root.style.setProperty('--bg', chrome.background);
+      document.body.style.background = chrome.background;
+    }
+    if (chrome.dark_background) root.style.setProperty('--bg-soft', chrome.dark_background);
+    if (chrome.foreground) root.style.setProperty('--text', chrome.foreground);
+    if (chrome.dark_foreground) root.style.setProperty('--text-muted', chrome.dark_foreground);
+    if (chrome.accent || t.accent) root.style.setProperty('--accent', chrome.accent || t.accent);
+    if (chrome.muted) root.style.setProperty('--line', chrome.muted);
+    var kinds = t.kinds || t.type_palette || {};
+    Object.keys(kinds).forEach(function (k) {
+      try {
+        document.documentElement.style.setProperty('--dot-' + k, kinds[k]);
+      } catch (e) {}
+    });
+  }
+
+  async function loadTheme() {
+    try {
+      var t = await (await fetch(api + '/api/theme')).json();
+      applyTheme(t);
+      return t;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* CE wiki-view atlas.js: Classic only offered when pages ≤ MIN_ATLAS_PAGES.
+     Biocure-scale (≥360) is Atlas-only — never show the classic switcher. */
+  var MIN_ATLAS_PAGES = 360;
+
+  function focusInAtlas(id) {
+    if (!id || !handle || !handle.engine || typeof handle.engine.focus !== 'function') return;
+    try { handle.engine.focus(id, 'user'); } catch (e) {}
+  }
+
+  function highlightNodes(ids) {
+    if (!handle || !handle.engine) return;
+    var list = Array.isArray(ids) ? ids.filter(Boolean) : [];
+    try {
+      if (typeof handle.engine.select === 'function') {
+        handle.engine.select(list, 'replace');
+      }
+      if (list.length && typeof handle.engine.focus === 'function') {
+        handle.engine.focus(list[0], 'system');
+      }
+    } catch (e) {}
+  }
+
+  function gateClassicChooser(pageCount) {
+    var btn = document.getElementById('viewer-mode');
+    if (!btn) return;
+    /* Hide classic entirely above the CE threshold (or if classic is absent). */
+    var show = false; // Okbay has no classic viewer yet; keep gated even if ≤360.
+    if (pageCount > MIN_ATLAS_PAGES) show = false;
+    btn.classList.toggle('hidden', !show);
+    btn.hidden = !show;
+    document.documentElement.dataset.classicHidden =
+      pageCount > MIN_ATLAS_PAGES ? 'over-threshold' : 'no-classic';
+  }
+
+  function toastFocus(id) {
+    if (!id) return;
+    setStatus('Focused · ' + id);
+    if (statusEl) statusEl.classList.add('focus-toast');
+    clearTimeout(toastFocus._t);
+    toastFocus._t = setTimeout(function () {
+      if (statusEl && statusEl.classList.contains('focus-toast') && !statusEl.classList.contains('error')) {
+        statusEl.classList.remove('focus-toast');
+        setStatus('');
+      }
+    }, 2800);
+  }
+
+  function openPage(id, opts) {
+    opts = opts || {};
+    if (!id) return;
+    if (!opts.skipHash) {
+      var next = '#page=' + encodeURIComponent(id);
+      if (location.hash !== next) location.hash = next;
+      else applyHash();
+      return;
+    }
+    OkbayAtlasChrome.Sidebar.setActive(id);
+    focusInAtlas(id);
+    toastFocus(id);
+    OkbayAtlasChrome.Modal.open(id);
+  }
+
+  function applyHash() {
+    var m = location.hash.match(/^#page=([^&]+)$/);
+    if (!m) return;
+    var pageId = decodeURIComponent(m[1]);
+    OkbayAtlasChrome.Sidebar.setActive(pageId);
+    focusInAtlas(pageId);
+    toastFocus(pageId);
+    OkbayAtlasChrome.Modal.open(pageId);
+  }
+
+  function onOpenItem(id) {
+    // dbl-click / item-open-requested from KnowledgeAtlas
+    openPage(id);
+  }
+
+  async function boot() {
+    if (!window.KnowledgeAtlas || typeof window.KnowledgeAtlas.mount !== 'function') {
+      setStatus('KnowledgeAtlas IIFE missing — check /static/vendor/knowledge-atlas.js', true);
+      return;
+    }
+    if (!window.OkbayAtlasChrome) {
+      setStatus('atlas-chrome.js failed to load', true);
+      return;
+    }
+    await loadTheme();
+    setStatus('Fetching /api/atlas/data…');
+    try {
+      var res = await fetch(api + '/api/atlas/data');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      ceData = await res.json();
+    } catch (e) {
+      setStatus('Failed to load atlas data: ' + (e && e.message ? e.message : e), true);
+      return;
+    }
+    var nodes = Array.isArray(ceData.nodes) ? ceData.nodes : [];
+    var corpusSize = nodes.length || (ceData.pages ? Object.keys(ceData.pages).length : 0);
+    var counts = document.getElementById('meta-counts');
+    if (counts) {
+      counts.textContent = corpusSize + ' · ' + ((ceData.edges || []).length) + ' links';
+    }
+
+    OkbayAtlasChrome.Sidebar.init(ceData, {
+      onSelect: function (id) { openPage(id); },
+      onHighlight: function (ids) { highlightNodes(ids); }
+    });
+    OkbayAtlasChrome.Modal.init(ceData, {
+      api: api,
+      onNavigate: function (id) { openPage(id); },
+      onClose: function () {},
+      onLocate: function (doc) {
+        if (!doc || !doc.ok) return;
+        var n = (doc.files && doc.files.length) || (doc.sources && doc.sources.length) || 0;
+        setStatus('Locate · ' + (doc.stem || '') + (n ? (' · ' + n + ' path(s)') : ''));
+        if (statusEl) statusEl.classList.add('focus-toast');
+      }
+    });
+
+    graphEl.innerHTML = '';
+    try {
+      // Match CE wiki-view atlas.js Policy A (Biocure): pin full-graph capacity
+      // so the scene is individual nodes only — no type-aggregate shell bubbles.
+      // Full-graph-resident also unlocks force network layout (not squircle core)
+      // and feeds the corner AtlasMinimap from the primary scene.
+      var edgeCount = (ceData.edges || []).length;
+      handle = window.KnowledgeAtlas.mount(graphEl, {
+        data: ceData,
+        config: {
+          layout: 'hybrid',
+          corpusSize: corpusSize,
+          coreCapacity: Math.max(1, corpusSize),
+          maxVisibleNodes: Math.max(1, corpusSize),
+          budget: {
+            maxNodes: Math.max(1, corpusSize),
+            maxAggregates: 0,
+            maxEdges: Math.max(900, edgeCount)
+          }
+        },
+        onOpenItem: onOpenItem,
+        onEvent: function (ev) {
+          if (ev.kind !== 'scene-ready' || !ev.stats) return;
+          var s = ev.stats;
+          document.documentElement.dataset.atlasNodes = String(s.nodeCount);
+          document.documentElement.dataset.atlasAggs = String(s.aggregateCount);
+          document.documentElement.dataset.atlasEdges = String(s.edgeCount);
+          document.title = 'OKBay Atlas · n=' + s.nodeCount + ' a=' + s.aggregateCount + ' e=' + s.edgeCount;
+          var mm = document.querySelector('canvas.atlas-minimap');
+          document.documentElement.dataset.atlasMinimap = mm ? (mm.hidden ? 'hidden' : 'visible') : 'missing';
+          setStatus('scene-ready · nodes=' + s.nodeCount + ' aggs=' + s.aggregateCount + ' edges=' + s.edgeCount + ' · minimap=' + (document.documentElement.dataset.atlasMinimap || '?'));
+        }
+      });
+    } catch (e) {
+      setStatus('KnowledgeAtlas.mount failed: ' + (e && e.message ? e.message : e), true);
+      return;
+    }
+
+    window.__okbayAtlasHandle = handle;
+    if (ceData.palette) OkbayAtlasChrome.applyPalette(ceData.palette);
+
+    /* Remount controls after KnowledgeAtlas.mount so they stay siblings of
+       #graph (never swallowed by the canvas) and visibly above it. */
+    var pane = document.getElementById('graph-pane');
+    var controlsEl = document.getElementById('graph-controls');
+    if (pane && controlsEl && controlsEl.parentElement !== pane) {
+      pane.appendChild(controlsEl);
+    } else if (pane && controlsEl) {
+      pane.appendChild(controlsEl); // ensure last child = top of stacking for z-auto peers
+    }
+    OkbayAtlasChrome.Controls.init(handle);
+    OkbayAtlasChrome.Keys.init({
+      handle: handle,
+      graphEl: graphEl,
+      onToast: toastFocus,
+      onOpenItem: onOpenItem
+    });
+    gateClassicChooser(corpusSize);
+    if (controlsEl) {
+      controlsEl.style.display = 'flex';
+      controlsEl.style.visibility = 'visible';
+      controlsEl.style.opacity = '1';
+      controlsEl.setAttribute('data-mounted', 'after-atlas');
+    }
+
+    window.addEventListener('hashchange', applyHash);
+    if (location.hash.indexOf('#page=') === 0) applyHash();
+
+    setStatus('OKBay Atlas · ' + corpusSize + ' nodes · labels/types · hybrid / policy A (no aggregates)');
+    setTimeout(function () {
+      if (statusEl && !statusEl.classList.contains('error')) setStatus('');
+    }, 3500);
+  }
+
+  setInterval(loadTheme, 4000);
+  boot();
+
+  window.addEventListener('beforeunload', function () {
+    if (window.OkbayAtlasChrome && OkbayAtlasChrome.Keys) OkbayAtlasChrome.Keys.destroy();
+    if (handle && handle.destroy) handle.destroy();
+  });
+})();
+</script>
+</body>
+</html>

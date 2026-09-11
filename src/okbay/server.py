@@ -1,16 +1,31 @@
 """Tiny HTTP front for Atlas + JSON API on :8766."""
 from __future__ import annotations
 import json
+import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
-from . import __version__, desks, graph, ingest, locate, paths, reviews, search, status, theme, wiki
+from urllib.parse import parse_qs, urlparse, unquote
+from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, wiki
+
+_STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
 def _atlas_html() -> str:
-    path = Path(__file__).resolve().parent / "static" / "atlas.html"
+    path = _STATIC_ROOT / "atlas.html"
     if path.is_file():
         return path.read_text(encoding="utf-8")
     return "<!doctype html><title>OKBay Atlas</title><p>atlas.html missing</p>"
+
+def _safe_static(rel: str) -> Path | None:
+    """Resolve /static/... under package static/; reject traversal."""
+    rel = unquote(rel).lstrip("/")
+    if not rel or ".." in rel.split("/"):
+        return None
+    target = (_STATIC_ROOT / rel).resolve()
+    try:
+        target.relative_to(_STATIC_ROOT.resolve())
+    except ValueError:
+        return None
+    return target if target.is_file() else None
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -30,6 +45,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+    def _file(self, path: Path, code=200):
+        data = path.read_bytes()
+        ctype, _ = mimetypes.guess_type(str(path))
+        if not ctype:
+            if path.suffix == ".js":
+                ctype = "application/javascript"
+            elif path.suffix == ".css":
+                ctype = "text/css"
+            else:
+                ctype = "application/octet-stream"
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=60")
+        self.end_headers()
+        self.wfile.write(data)
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -42,6 +73,12 @@ class Handler(BaseHTTPRequestHandler):
         path = u.path
         if path in ("/", "/atlas"):
             return self._html(_atlas_html())
+        # Vendor + other atlas static assets (knowledge-atlas.js, fuse, …).
+        if path.startswith("/static/"):
+            f = _safe_static(path[len("/static/"):])
+            if f is None:
+                return self._json({"error": "not found"}, 404)
+            return self._file(f)
         if path in ("/theme", "/api/theme"):
             return self._json(theme.resolve())
         if path == "/health":
@@ -50,14 +87,34 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(status.snapshot())
         if path in ("/api/graph", "/graph"):
             return self._json(graph.load())
+        # CE Atlas data bridge (CuriosityDataSource / CEData shape). See atlas_ce.py.
+        if path in ("/api/atlas/data", "/atlas/data"):
+            return self._json(atlas_ce.load_ce())
         if path in ("/api/search", "/atlas/search"):
             return self._json(search.search(q.get("q", [""])[0]))
         if path == "/api/reviews":
             return self._json({"reviews": reviews.list_reviews(q.get("state", ["pending"])[0])})
         if path == "/api/desk":
             return self._json(desks.status())
-        if path == "/api/locate":
-            return self._json(locate.locate(q.get("stem", [""])[0]))
+        # Accept /locate alias and both stem= / q= (atlas.html historically used ?q=).
+        if path in ("/api/locate", "/locate"):
+            stem = (q.get("stem") or q.get("q") or [""])[0]
+            rev = (q.get("reveal") or ["1"])[0].lower()
+            reveal = rev not in ("0", "false", "no", "off")
+            return self._json(locate.locate(stem, reveal=reveal))
+        # Slice 2: lazy wiki page for atlas modal (no body_html in /api/atlas/data).
+        if path in ("/api/atlas/page", "/atlas/page"):
+            stem = (q.get("stem") or q.get("q") or q.get("id") or [""])[0]
+            payload = wiki.page_payload(stem) if stem else None
+            if payload is None:
+                return self._json({"error": "not found", "stem": stem}, 404)
+            return self._json(payload)
+        if path.startswith("/api/wiki/") or path.startswith("/wiki/"):
+            stem = unquote(path.rsplit("/", 1)[-1]).strip()
+            payload = wiki.page_payload(stem) if stem else None
+            if payload is None:
+                return self._json({"error": "not found", "stem": stem}, 404)
+            return self._json(payload)
         return self._json({"error": "not found"}, 404)
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -72,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/rebuild":
             return self._json(graph.rebuild())
+        if path == "/api/atlas/enrich-kinds":
+            return self._json(atlas_ce.enrich_graph_kinds())
         if path == "/api/ingest":
             return self._json(ingest.ingest_path(body.get("path") or body.get("src") or ""))
         if path == "/api/propose":

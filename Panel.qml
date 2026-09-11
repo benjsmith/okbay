@@ -1,4 +1,7 @@
 // Okbay panel: Reviews inbox + standing desks + ingest hint.
+// Note: Omarchy loads this entry (panel kind) instead of Overlay.qml when both exist.
+// Atlas opens a frameless Chromium app window for now — Qt WebEngine inside Quickshell
+// crashes on this Omarchy/TCG guest (Chromium CommandLine/argv init).
 
 import QtQuick
 import QtQuick.Controls
@@ -19,8 +22,19 @@ Item {
   readonly property color themeMuted: (typeof Color !== "undefined" && Color.dark_foreground) ? Color.dark_foreground : "#888888"
   readonly property color themeAccent: (typeof Color !== "undefined" && Color.accent) ? Color.accent : "#6be8b3"
   readonly property string apiUrl: (status && status.api_url) ? status.api_url : "http://127.0.0.1:8766"
+  readonly property string atlasUrl: (status && status.atlas_url) ? status.atlas_url : (apiUrl + "/atlas")
 
   function open(payloadJson) {
+    var surface = "panel"
+    try {
+      var payload = payloadJson ? JSON.parse(payloadJson) : {}
+      if (payload && payload.surface)
+        surface = String(payload.surface)
+    } catch (e) {}
+    if (surface === "atlas") {
+      openAtlasWindow()
+      return
+    }
     opened = true
     statusFile.reload()
     Model.getJson(root.apiUrl + "/api/reviews?state=pending", function (parsed) {
@@ -29,6 +43,16 @@ Item {
   }
   function close() { opened = false }
   function toggle(payloadJson) { opened ? close() : open(payloadJson) }
+
+  function openAtlasWindow() {
+    // Frameless app-mode Chromium — no browser chrome; closest working fullscreen path
+    // until Qt WebEngine can initialize under Quickshell.
+    Quickshell.execDetached([
+      "sh", "-lc",
+      "pkill -f 'chromium.*8766/atlas' 2>/dev/null || true; " +
+      "chromium --ozone-platform=wayland --disable-gpu --app=" + root.atlasUrl + " --start-fullscreen >/tmp/okbay-atlas-chrome.log 2>&1 &"
+    ])
+  }
 
   function seat(kind) {
     Model.postJson(root.apiUrl + "/api/desk/start", {"kind": kind}, function () { statusFile.reload() })
@@ -60,6 +84,7 @@ Item {
     color: "transparent"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+    WlrLayershell.namespace: "okbay-panel"
     anchors.top: true
     anchors.right: true
     margins.top: 42
@@ -81,7 +106,7 @@ Item {
         Row {
           spacing: 6
           Button { text: "Ask"; onClicked: Quickshell.execDetached(["okbay", "ask", "--prompt"]) }
-          Button { text: "Atlas"; onClicked: Quickshell.execDetached(["omarchy-shell", "shell", "summon", "benjsmith.okbay", "{\"surface\":\"atlas\"}"]) }
+          Button { text: "Atlas"; onClicked: root.openAtlasWindow() }
           Button { text: "Ingest"; onClicked: root.ingestClipboardPath() }
         }
         Text { text: "Desks"; color: root.themeMuted; font.pixelSize: 12 }
@@ -99,8 +124,9 @@ Item {
           delegate: Rectangle {
             width: parent.width; height: 72; color: "transparent"
             Column {
-              anchors.fill: parent; anchors.margins: 4; spacing: 4
-              Text { text: modelData.title || modelData.stem || modelData.id; color: root.themeFg; font.pixelSize: 13; elide: Text.ElideRight; width: parent.width }
+              anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+              Text { text: (modelData.title || modelData.stem || modelData.id || "review"); color: root.themeFg; font.pixelSize: 13 }
+              Text { text: (modelData.kind || modelData.state || ""); color: root.themeMuted; font.pixelSize: 10 }
               Row {
                 spacing: 6
                 Button { text: "Accept"; onClicked: root.resolveReview(modelData.id, "accept") }
@@ -109,6 +135,7 @@ Item {
             }
           }
         }
+        Button { text: "Close"; onClicked: root.close() }
       }
     }
   }
