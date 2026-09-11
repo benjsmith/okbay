@@ -84,7 +84,7 @@ Three layers. Okbay should treat **knowledge-atlas** as the canvas engine and **
 | Graph API | `src/okbay/graph.py`, `crates/okbayd/src/graph.rs` | `{nodes, edges, pages}` — **not** `CEData` |
 | Theme API | `src/okbay/theme.py` → `GET /api/theme` | Switchbay CE type palette already present |
 | Search | Fuse in `atlas-chrome.js` (+ `GET /atlas/search` server) | Client Fuse over `/api/atlas/data` nodes |
-| Locate | `src/okbay/locate.py`, `GET /api/locate` + `/locate` | Opens parent dir via `xdg-open`; accepts `stem=` or `q=` (atlas.html uses `/api/locate?stem=`) |
+| Locate | `src/okbay/locate.py`, `GET /api/locate` + `/locate` | Prefer Omarchy Nautilus (`--select` / `--new-window`, optional `uwsm-app`); fall back to `xdg-open`; accepts `stem=` or `q=` |
 | Daemon | `server.py` / rust `okbayd` on `127.0.0.1:8766` | Serves `/` `/atlas` HTML |
 
 ---
@@ -388,7 +388,7 @@ Viewport scales budgets by √(area / 1200×800), clamp ×[0.5, 2].
 - [ ] Live Omarchy theme hot-reload (keep `/api/theme` poll or file watch)
 - [ ] Bar summon → Atlas workspace (left-click chip)
 - [ ] Wire select → `GET /api/locate?stem=` (fix query bug); optional suppress auto-`xdg-open`
-- [ ] Native file browser / Hypr reveal polish
+- [x] Native file browser / Hypr reveal polish (Nautilus `--select` + `uwsm-app`; xdg-open fallback)
 - [ ] Label type picker + physics sliders (CE chrome parity)
 - [ ] 1-hop subgraph pane (`subgraph.js`)
 - [ ] CE kind fidelity: ingest `type:` frontmatter → `kind`
