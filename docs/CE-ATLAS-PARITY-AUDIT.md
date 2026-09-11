@@ -103,7 +103,7 @@ Minimum Okbay target (from product lock): **log-space shells/border, fast Fuse s
 | First paint fits whole corpus (not type-cluster bubbles) | `atlas.js` sets `corpusSize`, `coreCapacity`, `maxVisibleNodes` to page count; `viewScaleToFit` |
 | Shell quotas (granular near → smeared far) | `SHELL_NODE_QUOTA` / `SHELL_AGG_QUOTA` in `shells.ts` |
 
-**CE wiki-view mount policy** (`atlas.js` ~205–224): for Atlas mode it **pins full-graph capacity** to corpus size and sets `maxAggregates: 0`, `maxEdges: max(900, edges.length)` — i.e. Biocure-scale CE opens as an individual-node log-boundary scene, not the default 460-node bounded scene. Okbay must decide the same policy explicitly (see §4 / §7).
+**CE wiki-view mount policy** (`atlas.js` ~205–224): for Atlas mode it **pins full-graph capacity** to corpus size and sets `maxAggregates: 0`, `maxEdges: max(900, edges.length)` — i.e. Biocure-scale CE opens as an individual-node log-boundary scene, not the default 460-node bounded scene. **Okbay product decision:** same hard policy — aggregates (type-bubble shells) unsupported / not offered; `maxAggregates: 0` only (see §4 / §7 / §8).
 
 ### 2.2 Search (Fuse)
 
@@ -317,9 +317,9 @@ Viewport scales budgets by √(area / 1200×800), clamp ×[0.5, 2].
 
 | Approach | Implication |
 |----------|-------------|
-| **A. CE wiki-view policy** (pin `coreCapacity = corpusSize`, all edges) | Full 40k-node force field + ~180k edges in memory. Proven in CE around 28–38k pages, but cold start / layout cost is large; overview edge omit at ≥5k helps minimap only. Risk: multi-second first layout, high RAM. |
-| **B. Engine default budgets** (460/900 + shells) | Fast first paint; log shells carry the rest; zoom raises capacity toward 10k. Safer for kiosk demo; slightly different from CE Atlas “whole wiki individual nodes” first frame. |
-| **C. Hybrid compromise** | First paint: viewScale-to-fit with `maxVisibleNodes: 10000`, shells beyond; defer full edge set; promote edges when zoomed. |
+| **A. CE wiki-view policy** (pin `coreCapacity = corpusSize`, all edges, `maxAggregates: 0`) | **Okbay shipped policy.** Full 40k-node force field + ~180k edges in memory. Proven in CE around 28–38k pages, but cold start / layout cost is large; overview edge omit at ≥5k helps minimap only. Risk: multi-second first layout, high RAM. Aggregates dropped by product decision — not an optional toggle. |
+| **B. Engine default budgets** (460/900 + shells) | *(Historical / CE engine default — not offered in Okbay.)* Fast first paint; log shells carry the rest; zoom raises capacity toward 10k. |
+| **C. Hybrid compromise** | *(Historical mis-mount — caused type-bubble aggregates; not a live Okbay option.)* First paint: viewScale-to-fit with `maxVisibleNodes: 10000`, shells beyond; defer full edge set; promote edges when zoomed. |
 
 **Payload size:** full `/graph` JSON for Biocure is already called out as heavy (`TESTING-FEEDBACK-TODO`). Bridge should avoid shipping `body_html` for all 39k pages in the first canvas slice (lazy page fetch).
 
@@ -435,7 +435,7 @@ Viewport scales budgets by √(area / 1200×800), clamp ×[0.5, 2].
 2. Rewrote `atlas.html`: full-viewport `#graph`, loads `/static/vendor/knowledge-atlas.js`, fetches `/api/atlas/data` + `/api/theme`, mounts:
 
 ```js
-// Policy A (CE wiki-view Biocure) — landed 2026-09-11 after aggregate/minimap diagnosis
+// Hard maxAggregates:0 (aggregates unsupported) — landed 2026-09-11; aggs status stripped later
 KnowledgeAtlas.mount(graphEl, {
   data: ceData,
   config: {
@@ -515,11 +515,13 @@ KnowledgeAtlas.mount(graphEl, {
 
 ---
 
-*Slice 0–2 landed. 2026-09-11: Policy A mount (no aggregates) + minimap path fixed via full-graph capacity — see §8.*
+*Slice 0–2 landed. 2026-09-11: Policy A mount (no aggregates) + minimap path fixed via full-graph capacity — see §8. Aggregates dropped by product decision; host UI no longer reports `aggs=`.*
 
 ---
 
 ## 8. Aggregate / minimap / rectangular-core diagnosis (2026-09-11)
+
+**Product decision (follow-up):** Okbay does **not** offer aggregates. Policy A / `maxAggregates: 0` is hard — not an optional budget. Host UI no longer surfaces `aggs=` / `aggregateCount` in the status bar, `document.title`, or `dataset.atlasAggs`. Policy C remains documented only as the historical mis-mount that produced type-bubble shells.
 
 ### Root causes
 
@@ -557,7 +559,7 @@ AFTER (Policy A = CE atlas.js):
 
 ### Validate (2026-09-11 ~11:29 CEST / Europe/Zurich)
 
-- Chromium title after scene-ready: `OKBay Atlas · n=40097 a=0 e=123039` (**zero aggregates**).
+- Chromium title after scene-ready: was `OKBay Atlas · n=40097 a=0 e=123039` (**zero aggregates**); host now omits `a=` / `aggs=` entirely (`OKBay Atlas · n=… e=…`).
 - Screenshot: `/workspace/omarchy-vm/logs/screen-atlas-ce-no-aggs.png` (QEMU screendump; grim failed under Hyprland 0.56 display capture).
 - Visual: individual colored nodes only (no numbered type bubbles); **minimap visible** bottom-right; dense force core still somewhat rectangular/blocky (full-graph force equilibrium + fit — not the old squircle+aggregate rim). Cosmological aggregate shells gone.
 - Local engine check (2k synth): Policy C-ish → aggregates > 0; Policy A → aggregates == 0 / no shell nodes (vitest, ephemeral).
