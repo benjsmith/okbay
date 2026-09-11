@@ -206,3 +206,69 @@ def test_locate_reveal_flag(ws, monkeypatch):
     assert doc["ok"] is True
     assert doc.get("revealed") is None
     assert "wiki" in doc
+
+def test_reveal_candidates_prefer_nautilus(tmp_path, monkeypatch):
+    """Omarchy path: nautilus --select before xdg-open; no crash when absent."""
+    from okbay import locate
+
+    target = tmp_path / "vault" / "doc.pdf"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"%PDF")
+
+    # Simulate Omarchy: both nautilus and uwsm-app present.
+    real_which = locate._which
+
+    def fake_which(name):
+        if name in ("nautilus", "uwsm-app", "xdg-open"):
+            return f"/usr/bin/{name}"
+        return None
+
+    monkeypatch.setattr(locate, "_which", fake_which)
+    cmds = locate._reveal_candidates(target)
+    assert cmds, "expected reveal candidates"
+    assert cmds[0][:4] == ["/usr/bin/uwsm-app", "--", "/usr/bin/nautilus", "--select"]
+    assert str(target) in cmds[0]
+    # xdg-open remains as last-resort fallback
+    assert any(c[0].endswith("xdg-open") for c in cmds)
+
+    # Headless / non-Omarchy: only xdg-open
+    def only_xdg(name):
+        return "/usr/bin/xdg-open" if name == "xdg-open" else None
+
+    monkeypatch.setattr(locate, "_which", only_xdg)
+    cmds2 = locate._reveal_candidates(target)
+    assert len(cmds2) == 1
+    assert cmds2[0][0].endswith("xdg-open")
+
+    # No managers at all
+    monkeypatch.setattr(locate, "_which", lambda _n: None)
+    assert locate._reveal_candidates(target) == []
+
+
+def test_locate_reveal_uses_nautilus(ws, monkeypatch, tmp_path):
+    from okbay import locate, paths
+
+    vault = paths.vault()
+    vault.mkdir(parents=True, exist_ok=True)
+    src = vault / "a.pdf"
+    src.write_bytes(b"%PDF")
+
+    spawned = []
+
+    def fake_which(name):
+        if name in ("nautilus", "xdg-open"):
+            return f"/usr/bin/{name}"
+        return None
+
+    def fake_spawn(cmd):
+        spawned.append(cmd)
+        return True
+
+    monkeypatch.setattr(locate, "_which", fake_which)
+    monkeypatch.setattr(locate, "_spawn", fake_spawn)
+    doc = locate.locate("beta", reveal=True)
+    assert doc["ok"] is True
+    assert doc.get("reveal_via") == "nautilus"
+    assert spawned and any("nautilus" in part for part in spawned[0])
+    assert "--select" in spawned[0]
+

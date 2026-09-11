@@ -78,7 +78,7 @@ fn handle(mut stream: TcpStream, ws: &PathBuf) -> std::io::Result<()> {
         // CE Atlas data bridge (CuriosityDataSource / CEData). See atlas_ce.rs.
         atlas_ce::build_ce_data(ws)
     } else if method == "GET" && (path == "/api/locate" || path == "/locate") {
-        // Accept stem= or legacy q=; reveal=0|false skips xdg-open (atlas toast / resolve-only).
+        // Accept stem= or legacy q=; reveal=0|false skips file-manager launch (atlas toast / resolve-only).
         let stem = { let s = q("stem"); if s.is_empty() { q("q") } else { s } };
         let rev = q("reveal");
         let reveal = !(rev == "0" || rev.eq_ignore_ascii_case("false") || rev.eq_ignore_ascii_case("no") || rev.eq_ignore_ascii_case("off"));

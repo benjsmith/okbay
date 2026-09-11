@@ -32,7 +32,7 @@ Stretch = Omarchy uplifts (Switchbay theme, bar summon, `okbay locate`, optional
 - [x] Parity B — chrome: Fuse search, slim wiki/source modal, in-atlas focus (`atlas-chrome.js`; see audit §7 Slice 2)
 - [ ] Option 3 packaging: frameless Chromium / special workspace; bar left-click opens Atlas
 - [x] File highlight via `okbay locate` — modal **Reveal files**, resolve-only on open (`reveal=0`), toast + sources/files list
-      (Omarchy-native browser stretch still open)
+- [x] Omarchy-native file browser reveal — prefer Nautilus (`uwsm-app` → `nautilus --select` / `--new-window`), fall back to `xdg-open` (see note below)
 - [x] Label option buttons + type popup (CE `initAtlasControls` slim port in atlas chrome)
 - [x] Label/type controls **visibly** mounted bottom-left after KnowledgeAtlas.mount (was top-right low-contrast; screenshots missed them)
 - [x] Sidebar expand/collapse-all (CE `sidebar-toggle-all` chevron)
@@ -44,6 +44,22 @@ Stretch = Omarchy uplifts (Switchbay theme, bar summon, `okbay locate`, optional
 - [x] Slice 1: vendor `knowledge-atlas.js` + mount against `/api/atlas/data` (see `CE-ATLAS-PARITY-AUDIT.md` §7)
 - [x] Slice 2: Fuse sidebar + slim wiki modal + focus/locate (`atlas-chrome.js`, `GET /api/atlas/page`)
 - [x] Slice 2+: type coloring (full palette), label/type controls, richer locate UX (2026-09-11)
+
+
+#### How Reveal works on Omarchy
+
+Omarchy’s default file browser is **Nautilus** (`org.gnome.Nautilus.desktop` for `inode/directory`; launchers `omarchy-launch-nautilus` / `omarchy-launch-nautilus-cwd` wrap `uwsm-app -- nautilus …`).
+
+Atlas **Reveal files** → `GET /api/locate?stem=&reveal=1`:
+
+1. Resolve wiki + vault/source paths (same as resolve-only `reveal=0`).
+2. Prefer launching **Nautilus** so the file is highlighted:
+   - existing file → `uwsm-app -- nautilus --select <path>` (else bare `nautilus --select`)
+   - directory / missing file with existing parent → `nautilus --new-window <dir>`
+3. Fall back to `xdg-open <parent>` when Nautilus is absent (non-Omarchy / headless).
+4. Atlas modal status shows `via nautilus|xdg-open` or an error-styled `reveal failed: …` if launch fails.
+
+Smoke: open Atlas, select a Biocure page with vault sources, click **Reveal files**; Nautilus should focus the source file. Headless CI keeps `reveal=0` / mocked spawn.
 
 ### Theme / wallpaper
 

@@ -505,9 +505,13 @@
           var sources = doc.sources || [];
           if (files.length) bits.push('files: ' + files.join(', '));
           else if (sources.length) bits.push('sources: ' + sources.join(', '));
+          if (doc.reveal_via) bits.push('via ' + doc.reveal_via);
           if (doc.revealed) bits.push('opened ' + (Array.isArray(doc.revealed) ? doc.revealed.join(' ') : doc.revealed));
-          if (doc.reveal_error) bits.push('reveal: ' + doc.reveal_error);
-          self.setLocateStatus(bits.join(' · ') || 'Located');
+          if (doc.reveal_error) bits.push('reveal failed: ' + doc.reveal_error);
+          var msg = bits.join(' · ') || 'Located';
+          // Explicit Reveal click: surface launch failures in error styling.
+          var err = !!(doc.reveal_error && doReveal);
+          self.setLocateStatus(msg, err);
           if (typeof self.onLocate === 'function') self.onLocate(doc);
           return doc;
         })
