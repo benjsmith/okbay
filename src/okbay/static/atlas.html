@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <!--
   Slice 2+ — CE KnowledgeAtlas + chrome (Fuse, labels/types, slim modal, locate/reveal).
-  Canvas: hybrid / CE wiki-view Policy A (individual nodes, maxAggregates:0).
+  Canvas: hybrid / full-graph individual nodes only (maxAggregates:0 hard).
+  Aggregates (type-bubble shells) are unsupported and not offered — product decision.
   See CE-ATLAS-PARITY-AUDIT §7 / §8.
 -->
 <style>
@@ -499,10 +500,9 @@
 
     graphEl.innerHTML = '';
     try {
-      // Match CE wiki-view atlas.js Policy A (Biocure): pin full-graph capacity
-      // so the scene is individual nodes only — no type-aggregate shell bubbles.
-      // Full-graph-resident also unlocks force network layout (not squircle core)
-      // and feeds the corner AtlasMinimap from the primary scene.
+      // Hard maxAggregates:0 — aggregates (type-bubble shells) unsupported / not offered.
+      // Pin full-graph capacity so the scene is real nodes only; unlocks force network
+      // layout (not squircle core) and feeds the corner AtlasMinimap from the primary scene.
       var edgeCount = (ceData.edges || []).length;
       handle = window.KnowledgeAtlas.mount(graphEl, {
         data: ceData,
@@ -522,12 +522,11 @@
           if (ev.kind !== 'scene-ready' || !ev.stats) return;
           var s = ev.stats;
           document.documentElement.dataset.atlasNodes = String(s.nodeCount);
-          document.documentElement.dataset.atlasAggs = String(s.aggregateCount);
           document.documentElement.dataset.atlasEdges = String(s.edgeCount);
-          document.title = 'OKBay Atlas · n=' + s.nodeCount + ' a=' + s.aggregateCount + ' e=' + s.edgeCount;
+          document.title = 'OKBay Atlas · n=' + s.nodeCount + ' e=' + s.edgeCount;
           var mm = document.querySelector('canvas.atlas-minimap');
           document.documentElement.dataset.atlasMinimap = mm ? (mm.hidden ? 'hidden' : 'visible') : 'missing';
-          setStatus('scene-ready · nodes=' + s.nodeCount + ' aggs=' + s.aggregateCount + ' edges=' + s.edgeCount + ' · minimap=' + (document.documentElement.dataset.atlasMinimap || '?'));
+          setStatus('scene-ready · nodes=' + s.nodeCount + ' edges=' + s.edgeCount + ' · minimap=' + (document.documentElement.dataset.atlasMinimap || '?'));
         }
       });
     } catch (e) {
@@ -565,7 +564,7 @@
     window.addEventListener('hashchange', applyHash);
     if (location.hash.indexOf('#page=') === 0) applyHash();
 
-    setStatus('OKBay Atlas · ' + corpusSize + ' nodes · labels/types · hybrid / policy A (no aggregates)');
+    setStatus('OKBay Atlas · ' + corpusSize + ' nodes · labels/types · hybrid (real nodes only)');
     setTimeout(function () {
       if (statusEl && !statusEl.classList.contains('error')) setStatus('');
     }, 3500);
