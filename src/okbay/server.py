@@ -132,7 +132,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/atlas/enrich-kinds":
             return self._json(atlas_ce.enrich_graph_kinds())
         if path == "/api/ingest":
-            return self._json(ingest.ingest_path(body.get("path") or body.get("src") or ""))
+            confirm = bool(body.get("confirm"))
+            return self._json(ingest.ingest_path(body.get("path") or body.get("src") or "", confirm=confirm))
+        if path in ("/api/privacy/scan", "/api/privacy"):
+            from . import privacy_gate
+            return self._json(privacy_gate.scan_path(body.get("path") or body.get("src") or ""))
+        if path == "/api/coverage":
+            from . import workroot
+            return self._json(workroot.coverage_status())
         if path == "/api/propose":
             return self._json(reviews.propose(body.get("title") or "untitled", body.get("body") or "", kind=body.get("kind") or "note", reason=body.get("reason") or ""))
         if path == "/api/review":
