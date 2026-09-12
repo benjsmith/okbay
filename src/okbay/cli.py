@@ -13,7 +13,9 @@ def main(argv=None):
     s = sub.add_parser("setup"); s.add_argument("--workspace")
     sub.add_parser("status")
     se = sub.add_parser("search"); se.add_argument("query"); se.add_argument("--json", action="store_true")
-    ing = sub.add_parser("ingest"); ing.add_argument("path")
+    ing = sub.add_parser("ingest")
+    ing.add_argument("path")
+    ing.add_argument("--confirm", action="store_true", help="Confirm ingest despite privacy/financial findings")
     pr = sub.add_parser("propose"); pr.add_argument("--title", required=True); pr.add_argument("--body", default=""); pr.add_argument("--kind", default="note")
     rv = sub.add_parser("reviews"); rv.add_argument("--json", action="store_true")
     rva = sub.add_parser("review"); rva.add_argument("action"); rva.add_argument("id")
@@ -22,11 +24,43 @@ def main(argv=None):
     gr = sub.add_parser("graph"); grsub = gr.add_subparsers(dest="graph_cmd", required=True)
     grsub.add_parser("rebuild", help="Rebuild graph.json from wiki (folds type:→kind)")
     grsub.add_parser("enrich-kinds", help="Patch kinds from wiki type: without full rebuild")
+
+    # Work coverage + named workspaces
+    cov = sub.add_parser("coverage", help="Work-root coverage status and opt-out")
+    covsub = cov.add_subparsers(dest="coverage_cmd", required=True)
+    covsub.add_parser("status")
+    co = covsub.add_parser("opt-out"); co.add_argument("path")
+    ci = covsub.add_parser("opt-in"); ci.add_argument("path")
+    csp = covsub.add_parser("split", help="Alias for workspace split")
+    csp.add_argument("name")
+    csp.add_argument("paths", nargs="+")
+    csp.add_argument("--hub")
+
+    ws = sub.add_parser("workspace", help="Workspaces (demo hub + optional focused splits)")
+    wsub = ws.add_subparsers(dest="workspace_cmd", required=True)
+    wsub.add_parser("list")
+    wu = wsub.add_parser("use"); wu.add_argument("name")
+    wa = wsub.add_parser("add"); wa.add_argument("name"); wa.add_argument("path")
+    wsp = wsub.add_parser("split", help="Split Work subfolders into a focused workspace")
+    wsp.add_argument("name")
+    wsp.add_argument("paths", nargs="+", help="Work subfolders to cover")
+    wsp.add_argument("--hub", help="Override vault/wiki location")
+
+    wch = sub.add_parser("watch", help="Efficient Work-root watcher")
+    wchsub = wch.add_subparsers(dest="watch_cmd", required=True)
+    wo = wchsub.add_parser("once"); wo.add_argument("--confirm", action="store_true")
+    wserve = wchsub.add_parser("serve")
+    wserve.add_argument("--interval", type=float, default=3.0)
+    wserve.add_argument("--debounce", type=float, default=2.5)
+    wserve.add_argument("--confirm", action="store_true")
+
+    priv = sub.add_parser("privacy"); priv.add_argument("path"); priv.add_argument("--json", action="store_true")
+
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
-        ws = Path(args.workspace).expanduser() if args.workspace else paths.default_workspace()
-        root = paths.ensure_workspace(ws)
+        ws_path = Path(args.workspace).expanduser() if args.workspace else paths.default_workspace()
+        root = paths.ensure_workspace(ws_path)
         graph.rebuild(root)
         return _print(status.snapshot())
     if args.cmd == "status":
@@ -37,7 +71,7 @@ def main(argv=None):
         return _print(search.search(args.query), True)
     if args.cmd == "ingest":
         from . import ingest
-        return _print(ingest.ingest_path(args.path))
+        return _print(ingest.ingest_path(args.path, confirm=bool(args.confirm)))
     if args.cmd == "propose":
         from . import reviews
         return _print(reviews.propose(args.title, args.body, kind=args.kind))
@@ -63,4 +97,37 @@ def main(argv=None):
         if args.graph_cmd == "enrich-kinds":
             from . import atlas_ce
             return _print(atlas_ce.enrich_graph_kinds())
+    if args.cmd == "coverage":
+        from . import workroot
+        if args.coverage_cmd == "status":
+            return _print(workroot.coverage_status())
+        if args.coverage_cmd == "opt-out":
+            return _print(workroot.opt_out(args.path))
+        if args.coverage_cmd == "opt-in":
+            return _print(workroot.opt_in(args.path))
+        if args.coverage_cmd == "split":
+            return _print(workroot.split_workspace(args.name, args.paths, hub=args.hub))
+    if args.cmd == "workspace":
+        from . import workroot
+        if args.workspace_cmd == "list":
+            return _print(workroot.list_workspaces())
+        if args.workspace_cmd == "use":
+            return _print(workroot.use_workspace(args.name))
+        if args.workspace_cmd == "add":
+            return _print(workroot.add_workspace(args.name, args.path))
+        if args.workspace_cmd == "split":
+            return _print(workroot.split_workspace(args.name, args.paths, hub=args.hub))
+    if args.cmd == "watch":
+        from . import watch
+        if args.watch_cmd == "once":
+            return _print(watch.watch_once(confirm=bool(args.confirm)))
+        if args.watch_cmd == "serve":
+            return watch.watch_serve(
+                interval=args.interval,
+                debounce=args.debounce,
+                confirm=bool(args.confirm),
+            )
+    if args.cmd == "privacy":
+        from . import privacy_gate
+        return _print(privacy_gate.scan_path(args.path), True)
     return 1

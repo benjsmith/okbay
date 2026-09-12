@@ -11,6 +11,8 @@
 
 Desktop e2e for a later Grok session on a real Omarchy box: [docs/E2E-HANDOVER.md](docs/E2E-HANDOVER.md).
 
+Work-root coverage, privacy gate, and watcher: **[docs/WORK-COVERAGE.md](docs/WORK-COVERAGE.md)**.
+
 Compounding knowledge graph, Atlas overlay, and typed agent desks for [Omarchy](https://omarchy.org/).
 
 Drop files. Do not organize them. Ask questions. The wiki gets stricter every time a proposed page survives review.
@@ -25,6 +27,10 @@ Plugin id: `benjsmith.okbay`
 
 ## What v1 is aiming at
 
+- **Magical coverage of `~/Work`** (`OKBAY_WORK_ROOT`); hub vault/wiki at `~/Work/okbay`
+- **Biocure** is the active demo workspace (not an opt-in toggle); optional **focused** workspaces via `okbay workspace split`
+- Opt-out folders in `~/.config/okbay/coverage.toml`; privacy + financial pre-ingest gate
+- Efficient `okbay watch` (watchdog or mtime index); code repos → decision notes only
 - Workspace at `~/Work/okbay/{vault,wiki}` (Omarchy agents already start in `~/Work`)
 - Ingest copies sources into the vault and extracts a `kind: source` wiki page with `extracted_from` provenance
 - Agents **propose** wiki pages; you accept or reject in the Reviews panel. No blind writes.
@@ -50,6 +56,11 @@ Plugin id: `benjsmith.okbay`
 ## Use
 
 ```sh
+# okbay coverage status
+# okbay workspace use biocure   # active demo hub
+# okbay workspace split topic ~/Work/topic   # optional focused wiki
+# okbay watch once              # efficient Work-root pass
+# okbay privacy ~/Work/notes/x.md && okbay ingest ~/Work/notes/x.md --confirm
 # okbay ingest ~/Downloads/lease.pdf
 # okbay ask "deposit rules"
 # okbay desk start curate
@@ -80,7 +91,7 @@ themes/switchbay       optional Omarchy theme (doc-type palette + mark wallpaper
 ## Testing
 
 ```sh
-PYTHONPATH=src python3 -m pytest tests/test_okbay.py tests/test_e2e_http.py -q
+PYTHONPATH=src python3 -m pytest tests/test_okbay.py tests/test_work_coverage.py tests/test_e2e_http.py -q
 ```
 
 Desktop e2e for a later Grok session on a real Omarchy VM: **[docs/E2E-HANDOVER.md](docs/E2E-HANDOVER.md)**.

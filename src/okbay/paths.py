@@ -96,3 +96,16 @@ def ensure_workspace(ws: Path | None = None) -> Path:
 
 def ensure_layout(ws: Path | None = None) -> Path:
     return ensure_workspace(ws)
+
+def config_dir() -> Path:
+    p = xdg_config() / "okbay"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+def coverage_config_path() -> Path:
+    return config_dir() / "coverage.toml"
+
+def work_root() -> Path:
+    """Magical coverage root (~/Work). See okbay.workroot."""
+    from . import workroot as wr
+    return wr.work_root()

@@ -2,15 +2,41 @@
 from __future__ import annotations
 import hashlib, shutil
 from pathlib import Path
-from . import paths
+from . import code_policy, paths, privacy_gate, workroot
 from .store import connect, reindex
 from .wiki import slugify, write_page
 
-def ingest_path(src: str | Path, ws: Path | None = None, note: str = "") -> dict:
+def ingest_path(
+    src: str | Path,
+    ws: Path | None = None,
+    note: str = "",
+    confirm: bool = False,
+    skip_privacy: bool = False,
+) -> dict:
     root = ws or paths.workspace()
     src_path = Path(src).expanduser().resolve()
     if not src_path.exists():
         raise FileNotFoundError(src_path)
+
+    cfg = workroot.load_coverage()
+    if workroot.is_opted_out(src_path, cfg):
+        return {
+            "ok": False,
+            "skipped": True,
+            "reason": "opt_out",
+            "path": str(src_path),
+            "message": "Path is opted out in coverage.toml",
+        }
+
+    # Code repos: decision/beta note only (vault drops are exempt).
+    if code_policy.should_skip_code_ingest(src_path, ws=root):
+        return code_policy.note_repo_change(src_path, ws=root)
+
+    if not skip_privacy:
+        blocked = privacy_gate.gate_ingest(src_path, confirm=confirm)
+        if blocked is not None:
+            return blocked
+
     vault = paths.vault(root)
     vault.mkdir(parents=True, exist_ok=True)
     dest = vault / src_path.name
@@ -22,14 +48,33 @@ def ingest_path(src: str | Path, ws: Path | None = None, note: str = "") -> dict
     text = _preview(dest)
     title = dest.stem.replace("_", " ").replace("-", " ")
     stem = slugify(title)
-    page = write_page(paths.wiki(root), stem, title, f"Captured from `{dest.name}`.\n\n```\n{text}\n```\n", kind="source", sources=[dest.name])
+    page = write_page(
+        paths.wiki(root),
+        stem,
+        title,
+        f"Captured from `{dest.name}`.\n\n```\n{text}\n```\n",
+        kind="source",
+        sources=[dest.name],
+    )
     con = connect()
     with con:
-        con.execute("INSERT INTO ingest_log(path, status, note) VALUES (?,?,?)", (str(dest), "staged", str(page)))
+        con.execute(
+            "INSERT INTO ingest_log(path, status, note) VALUES (?,?,?)",
+            (str(dest), "staged", str(page)),
+        )
     con.close()
     page_path = getattr(page, "path", page)
     reindex(root)
-    return {"ok": True, "vault": str(dest), "page": str(page_path), "stem": stem, "title": title, "note": note, "kind": "source"}
+    return {
+        "ok": True,
+        "vault": str(dest),
+        "page": str(page_path),
+        "stem": stem,
+        "title": title,
+        "note": note,
+        "kind": "source",
+        "needs_confirm": False,
+    }
 
 def _preview(path: Path, limit: int = 2000) -> str:
     try:
