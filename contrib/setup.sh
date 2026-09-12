@@ -19,15 +19,15 @@ if command -v cargo >/dev/null 2>&1; then
 fi
 cat > "$BIN/okbay" <<EOF
 #!/usr/bin/env bash
-export PYTHONPATH="$REPO_ROOT/src:${PYTHONPATH:-}"
-exec python3 -m okbay "$@"
+export PYTHONPATH="$REPO_ROOT/src:\${PYTHONPATH:-}"
+exec python3 -m okbay "\$@"
 EOF
 chmod +x "$BIN/okbay"
 cat > "$BIN/okbayd" <<EOF
 #!/usr/bin/env bash
-if [ -x "$BIN/okbayd-rs" ]; then exec "$BIN/okbayd-rs" "$@"; fi
-export PYTHONPATH="$REPO_ROOT/src:${PYTHONPATH:-}"
-exec python3 -m okbay serve "$@"
+if [ -x "$BIN/okbayd-rs" ]; then exec "$BIN/okbayd-rs" "\$@"; fi
+export PYTHONPATH="$REPO_ROOT/src:\${PYTHONPATH:-}"
+exec python3 -m okbay serve "\$@"
 EOF
 chmod +x "$BIN/okbayd"
 OKBAY_WORKSPACE="$WORKSPACE" "$BIN/okbay" setup --workspace "$WORKSPACE" || true
