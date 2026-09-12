@@ -179,3 +179,60 @@ def test_code_policy_git_root(env):
     nested.write_text("x=1\n")
     assert code_policy.git_root(nested) == repo.resolve()
     assert code_policy.should_skip_code_ingest(nested, ws=env["hub"])
+
+
+def test_workspace_split_opt_out_and_watch_roots(env):
+    work = env["work"]
+    topic = work / "topic-a"
+    topic.mkdir()
+    (topic / "note.txt").write_text("topic note\n")
+    other = work / "other"
+    other.mkdir()
+    (other / "keep.txt").write_text("stays on default\n")
+
+    out = workroot.split_workspace("topic-a", [topic])
+    assert out["ok"] is True
+    assert workroot.is_opted_out(topic)
+    assert not workroot.is_opted_out(other)
+
+    listed = workroot.list_workspaces()
+    assert "topic-a" in listed["workspaces"]
+    roots = listed["watch_roots"]["topic-a"]
+    assert any(Path(r).resolve() == topic.resolve() for r in roots)
+
+    hub = Path(out["workspace"])
+    assert (hub / "vault").is_dir() and (hub / "wiki").is_dir()
+
+    cfg = workroot.load_coverage()
+    default_files = watch.iter_coverage_files(root=work, cfg=cfg)
+    assert not any(p.resolve() == (topic / "note.txt").resolve() for p in default_files)
+
+    workroot.use_workspace("topic-a")
+    focused = workroot.coverage_roots()
+    assert topic.resolve() in {p.resolve() for p in focused}
+    focused_files = watch.iter_coverage_files(cfg=workroot.load_coverage())
+    assert any(p.resolve() == (topic / "note.txt").resolve() for p in focused_files)
+
+
+def test_workspace_split_idempotent(env):
+    work = env["work"]
+    d = work / "alpha"
+    d.mkdir()
+    first = workroot.split_workspace("alpha", [d])
+    second = workroot.split_workspace("alpha", [d])
+    assert first["workspace"] == second["workspace"]
+    cfg = workroot.load_coverage()
+    matches = [x for x in cfg["opt_out"] if Path(x).expanduser().resolve() == d.resolve()]
+    assert len(matches) == 1
+    assert len(cfg["watch_roots"]["alpha"]) == 1
+
+
+def test_cli_workspace_split(env):
+    from okbay.cli import main
+    work = env["work"]
+    d = work / "beta"
+    d.mkdir()
+    rc = main(["workspace", "split", "beta", str(d)])
+    assert rc == 0
+    assert workroot.is_opted_out(d)
+    assert "beta" in workroot.load_coverage()["watch_roots"]

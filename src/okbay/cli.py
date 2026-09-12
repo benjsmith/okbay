@@ -31,12 +31,20 @@ def main(argv=None):
     covsub.add_parser("status")
     co = covsub.add_parser("opt-out"); co.add_argument("path")
     ci = covsub.add_parser("opt-in"); ci.add_argument("path")
+    csp = covsub.add_parser("split", help="Alias for workspace split")
+    csp.add_argument("name")
+    csp.add_argument("paths", nargs="+")
+    csp.add_argument("--hub")
 
-    ws = sub.add_parser("workspace", help="Named workspaces (e.g. biocure)")
+    ws = sub.add_parser("workspace", help="Workspaces (demo hub + optional focused splits)")
     wsub = ws.add_subparsers(dest="workspace_cmd", required=True)
     wsub.add_parser("list")
     wu = wsub.add_parser("use"); wu.add_argument("name")
     wa = wsub.add_parser("add"); wa.add_argument("name"); wa.add_argument("path")
+    wsp = wsub.add_parser("split", help="Split Work subfolders into a focused workspace")
+    wsp.add_argument("name")
+    wsp.add_argument("paths", nargs="+", help="Work subfolders to cover")
+    wsp.add_argument("--hub", help="Override vault/wiki location")
 
     wch = sub.add_parser("watch", help="Efficient Work-root watcher")
     wchsub = wch.add_subparsers(dest="watch_cmd", required=True)
@@ -97,6 +105,8 @@ def main(argv=None):
             return _print(workroot.opt_out(args.path))
         if args.coverage_cmd == "opt-in":
             return _print(workroot.opt_in(args.path))
+        if args.coverage_cmd == "split":
+            return _print(workroot.split_workspace(args.name, args.paths, hub=args.hub))
     if args.cmd == "workspace":
         from . import workroot
         if args.workspace_cmd == "list":
@@ -105,6 +115,8 @@ def main(argv=None):
             return _print(workroot.use_workspace(args.name))
         if args.workspace_cmd == "add":
             return _print(workroot.add_workspace(args.name, args.path))
+        if args.workspace_cmd == "split":
+            return _print(workroot.split_workspace(args.name, args.paths, hub=args.hub))
     if args.cmd == "watch":
         from . import watch
         if args.watch_cmd == "once":

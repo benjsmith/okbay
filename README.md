@@ -28,7 +28,7 @@ Plugin id: `benjsmith.okbay`
 ## What v1 is aiming at
 
 - **Magical coverage of `~/Work`** (`OKBAY_WORK_ROOT`); hub vault/wiki at `~/Work/okbay`
-- Biocure (and other corpora) as **named workspaces** via `okbay workspace use`
+- **Biocure** is the active demo workspace (not an opt-in toggle); optional **focused** workspaces via `okbay workspace split`
 - Opt-out folders in `~/.config/okbay/coverage.toml`; privacy + financial pre-ingest gate
 - Efficient `okbay watch` (watchdog or mtime index); code repos → decision notes only
 - Workspace at `~/Work/okbay/{vault,wiki}` (Omarchy agents already start in `~/Work`)
@@ -57,7 +57,8 @@ Plugin id: `benjsmith.okbay`
 
 ```sh
 # okbay coverage status
-# okbay workspace use biocure   # optional named corpus
+# okbay workspace use biocure   # active demo hub
+# okbay workspace split topic ~/Work/topic   # optional focused wiki
 # okbay watch once              # efficient Work-root pass
 # okbay privacy ~/Work/notes/x.md && okbay ingest ~/Work/notes/x.md --confirm
 # okbay ingest ~/Downloads/lease.pdf

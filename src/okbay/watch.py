@@ -63,10 +63,9 @@ def _connect_mtime() -> sqlite3.Connection:
     return con
 
 
-def iter_coverage_files(root: Path | None = None, cfg: dict | None = None) -> list[Path]:
-    root = (root or workroot.work_root()).resolve()
-    cfg = cfg or workroot.load_coverage()
+def _iter_one_root(root: Path, cfg: dict) -> list[Path]:
     out: list[Path] = []
+    root = root.resolve()
     if not root.is_dir():
         return out
     stack = [root]
@@ -98,6 +97,21 @@ def iter_coverage_files(root: Path | None = None, cfg: dict | None = None) -> li
     return out
 
 
+def iter_coverage_files(root: Path | None = None, cfg: dict | None = None) -> list[Path]:
+    cfg = cfg or workroot.load_coverage()
+    if root is not None:
+        roots = [Path(root).resolve()]
+        scan_cfg = cfg
+    else:
+        roots = workroot.coverage_roots(cfg)
+        # Focused watch roots were opted out of default Work; allow them here.
+        scan_cfg = workroot.cfg_allowing_watch_roots(cfg, roots)
+    out: list[Path] = []
+    for r in roots:
+        out.extend(_iter_one_root(r, scan_cfg))
+    return out
+
+
 def changed_since_index(files: list[Path], con: sqlite3.Connection | None = None) -> list[Path]:
     own = con is None
     con = con or _connect_mtime()
@@ -126,7 +140,9 @@ def changed_since_index(files: list[Path], con: sqlite3.Connection | None = None
 def handle_path(path: Path, confirm: bool = False, ws: Path | None = None) -> dict[str, Any]:
     """Apply policy for one changed path."""
     cfg = workroot.load_coverage()
-    if workroot.is_opted_out(path, cfg):
+    roots = workroot.coverage_roots(cfg)
+    scan_cfg = workroot.cfg_allowing_watch_roots(cfg, roots)
+    if workroot.is_opted_out(path, scan_cfg):
         return {"ok": True, "skipped": True, "reason": "opt_out", "path": str(path)}
     if code_policy.is_git_dir(path):
         return {"ok": True, "skipped": True, "reason": "git_dir", "path": str(path)}
@@ -199,12 +215,18 @@ def watch_serve(
                     return
                 pending[str(Path(src))] = time.time()
 
-        root_path = Path(root or workroot.work_root())
-        if root_path.is_dir():
-            observer = Observer()
-            observer.schedule(Handler(), str(root_path), recursive=True)
+        roots = [Path(root)] if root is not None else workroot.coverage_roots()
+        observer = Observer()
+        scheduled = 0
+        for root_path in roots:
+            if root_path.is_dir():
+                observer.schedule(Handler(), str(root_path), recursive=True)
+                scheduled += 1
+        if scheduled:
             observer.start()
             use_watchdog = True
+        else:
+            observer = None
     except Exception:
         use_watchdog = False
         observer = None

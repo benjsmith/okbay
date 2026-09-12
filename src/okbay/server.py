@@ -140,6 +140,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/coverage":
             from . import workroot
             return self._json(workroot.coverage_status())
+        if path == "/api/workspace/split":
+            from . import workroot
+            paths_in = body.get("paths") or body.get("path") or []
+            if isinstance(paths_in, str):
+                paths_in = [paths_in]
+            try:
+                return self._json(workroot.split_workspace(
+                    body.get("name") or "",
+                    paths_in,
+                    hub=body.get("hub"),
+                ))
+            except (ValueError, KeyError) as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
         if path == "/api/propose":
             return self._json(reviews.propose(body.get("title") or "untitled", body.get("body") or "", kind=body.get("kind") or "note", reason=body.get("reason") or ""))
         if path == "/api/review":

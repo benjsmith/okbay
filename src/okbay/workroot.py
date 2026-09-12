@@ -1,8 +1,9 @@
-"""Work-coverage root, opt-outs, and named workspaces.
+"""Work-coverage root, opt-outs, and focused workspaces.
 
-Default experience: magically cover ~/Work (OKBAY_WORK_ROOT / coverage.toml).
-The CE wiki/vault hub stays at ~/Work/okbay (OKBAY_WORKSPACE). Named workspaces
-(e.g. biocure) are switched via `okbay workspace use`.
+Default experience: magical coverage of ~/Work (OKBAY_WORK_ROOT / coverage.toml).
+The hub vault/wiki lives at ~/Work/okbay (OKBAY_WORKSPACE). Biocure is the active
+demo workspace (not an "opt-in" product). Users may optionally split Work
+subfolders into additional focused workspaces via `okbay workspace split`.
 """
 from __future__ import annotations
 
@@ -41,6 +42,10 @@ def _expand(raw: str | Path) -> Path:
     return Path(str(raw)).expanduser().resolve()
 
 
+def _sanitize_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9_-]+", "-", name.strip().lower()).strip("-") or "ws"
+
+
 def _load_toml(path: Path) -> dict[str, Any]:
     if not path.is_file() or tomllib is None:
         return {}
@@ -75,8 +80,28 @@ def _dump_toml(data: dict[str, Any]) -> str:
         lines.append("[workspaces]")
         for name, dest in sorted(workspaces.items()):
             lines.append(f"{name} = {_quote_toml(str(dest))}")
+    watch_roots = data.get("watch_roots") or {}
+    if watch_roots:
+        if lines:
+            lines.append("")
+        lines.append("[watch_roots]")
+        for name, roots in sorted(watch_roots.items()):
+            items = ", ".join(_quote_toml(str(x)) for x in (roots or []))
+            lines.append(f"{name} = [{items}]")
     lines.append("")
     return "\n".join(lines)
+
+
+def _normalize_watch_roots(raw: Any) -> dict[str, list[str]]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, list[str]] = {}
+    for k, v in raw.items():
+        if isinstance(v, list):
+            out[str(k)] = [str(x) for x in v]
+        elif isinstance(v, str) and v.strip():
+            out[str(k)] = [v]
+    return out
 
 
 def load_coverage() -> dict[str, Any]:
@@ -94,6 +119,7 @@ def load_coverage() -> dict[str, Any]:
         "work_root": str(_expand(wr)) if wr else str(default_work_root()),
         "opt_out": [str(x) for x in opt_out],
         "workspaces": {str(k): str(v) for k, v in workspaces.items()},
+        "watch_roots": _normalize_watch_roots(raw.get("watch_roots")),
         "active_workspace": str(raw.get("active_workspace") or "") or None,
     }
 
@@ -105,6 +131,7 @@ def save_coverage(data: dict[str, Any]) -> Path:
         "work_root": data.get("work_root") or str(default_work_root()),
         "opt_out": list(data.get("opt_out") or []),
         "workspaces": dict(data.get("workspaces") or {}),
+        "watch_roots": _normalize_watch_roots(data.get("watch_roots") or {}),
     }
     if data.get("active_workspace"):
         payload["active_workspace"] = data["active_workspace"]
@@ -171,7 +198,7 @@ def opt_in(path: str | Path) -> dict[str, Any]:
     outs = []
     for x in cfg.get("opt_out") or []:
         xs = str(x)
-        if xs == entry or xs == path or ( "*" not in xs and str(_expand(xs)) == resolved):
+        if xs == entry or xs == path or ("*" not in xs and str(_expand(xs)) == resolved):
             continue
         outs.append(xs)
     cfg["opt_out"] = outs
@@ -191,6 +218,7 @@ def list_workspaces() -> dict[str, Any]:
     return {
         "work_root": str(work_root()),
         "workspaces": named,
+        "watch_roots": dict(cfg.get("watch_roots") or {}),
         "active": active,
         "current": current,
         "opt_out": list(cfg.get("opt_out") or []),
@@ -198,7 +226,7 @@ def list_workspaces() -> dict[str, Any]:
 
 
 def add_workspace(name: str, path: str | Path) -> dict[str, Any]:
-    name = re.sub(r"[^a-z0-9_-]+", "-", name.strip().lower()).strip("-") or "ws"
+    name = _sanitize_name(name)
     cfg = load_coverage()
     workspaces = dict(cfg.get("workspaces") or {})
     dest = str(Path(path).expanduser())
@@ -221,7 +249,104 @@ def use_workspace(name: str) -> dict[str, Any]:
     cfg["workspaces"] = workspaces
     cfg["active_workspace"] = name
     save_coverage(cfg)
-    return {"ok": True, "name": name, "workspace": str(dest)}
+    return {
+        "ok": True,
+        "name": name,
+        "workspace": str(dest),
+        "watch_roots": list((cfg.get("watch_roots") or {}).get(name) or []),
+    }
+
+
+def coverage_roots(cfg: dict[str, Any] | None = None, workspace_name: str | None = None) -> list[Path]:
+    """Roots the watcher should scan.
+
+    Default / okbay hub → full work_root. Focused workspace with watch_roots → those
+    folders only. Explicit opt-outs still apply on the default Work scan.
+    """
+    cfg = cfg or load_coverage()
+    name = workspace_name if workspace_name is not None else cfg.get("active_workspace")
+    watch = cfg.get("watch_roots") or {}
+    if name and name != "okbay" and name in watch and watch[name]:
+        return [_expand(p) for p in watch[name]]
+    return [work_root()]
+
+
+def cfg_allowing_watch_roots(cfg: dict[str, Any], roots: list[Path]) -> dict[str, Any]:
+    """Drop opt-out entries that exactly match focused watch roots (they were
+    excluded from default Work coverage, not from the focused workspace)."""
+    root_set = {r.resolve() for r in roots}
+    filtered: list[str] = []
+    for entry in cfg.get("opt_out") or []:
+        raw = str(entry)
+        if "*" not in raw and _expand(raw) in root_set:
+            continue
+        filtered.append(raw)
+    out = dict(cfg)
+    out["opt_out"] = filtered
+    return out
+
+
+def split_workspace(
+    name: str,
+    paths_in: list[str | Path],
+    hub: str | Path | None = None,
+) -> dict[str, Any]:
+    """Create a focused workspace from Work subfolders.
+
+    - Ensures vault/wiki hub layout
+    - Registers workspace + watch_roots for the given folders
+    - Adds those folders to default Work opt_out (idempotent)
+    """
+    name = _sanitize_name(name)
+    if not paths_in:
+        raise ValueError("split requires at least one path")
+    resolved: list[Path] = []
+    for raw in paths_in:
+        p = _expand(raw)
+        resolved.append(p)
+
+    cfg = load_coverage()
+    workspaces = dict(cfg.get("workspaces") or {})
+    watch_roots = _normalize_watch_roots(cfg.get("watch_roots") or {})
+
+    if hub is not None:
+        dest = Path(hub).expanduser()
+    elif name in workspaces:
+        dest = Path(workspaces[name]).expanduser()
+    else:
+        dest = work_root() / f"{name}-wiki"
+
+    root = paths.ensure_workspace(dest)
+    workspaces[name] = str(root)
+
+    existing = [_expand(x) for x in (watch_roots.get(name) or [])]
+    seen = {p.resolve() for p in existing}
+    for p in resolved:
+        if p.resolve() not in seen:
+            existing.append(p)
+            seen.add(p.resolve())
+    watch_roots[name] = [str(p) for p in existing]
+
+    outs = list(cfg.get("opt_out") or [])
+    out_resolved = {_expand(x) for x in outs if "*" not in str(x)}
+    for p in resolved:
+        if p.resolve() not in out_resolved:
+            outs.append(str(p))
+            out_resolved.add(p.resolve())
+
+    cfg["workspaces"] = workspaces
+    cfg["watch_roots"] = watch_roots
+    cfg["opt_out"] = outs
+    save_coverage(cfg)
+
+    return {
+        "ok": True,
+        "name": name,
+        "workspace": str(root),
+        "watch_roots": list(watch_roots[name]),
+        "opt_out": list(outs),
+        "hub": str(root),
+    }
 
 
 def coverage_status() -> dict[str, Any]:
@@ -232,6 +357,8 @@ def coverage_status() -> dict[str, Any]:
         "default_hub": str(paths.default_workspace()),
         "opt_out": list(cfg.get("opt_out") or []),
         "workspaces": dict(cfg.get("workspaces") or {}),
+        "watch_roots": dict(cfg.get("watch_roots") or {}),
         "active_workspace": cfg.get("active_workspace"),
+        "coverage_roots": [str(p) for p in coverage_roots(cfg)],
         "config": str(coverage_config_path()),
     }
