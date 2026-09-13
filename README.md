@@ -82,6 +82,8 @@ Service.qml            headless keep-alive
 src/okbay/             CLI, wiki, graph, reviews, desks, Python fallback HTTP
 crates/okbayd          Rust warm daemon (preferred on :8766)
 contrib/setup.sh       visible installer
+contrib/okbay-open-atlas.sh  Super+Shift+K Atlas opener (sets OMARCHY_PATH)
+contrib/hypr-bindings.lua    Hyprland bind snippet
 contrib/okbayd.service systemd --user
 contrib/mcp_server.py  stdio MCP
 skills/                okbay-ask, okbay-curate, okbay-desk
