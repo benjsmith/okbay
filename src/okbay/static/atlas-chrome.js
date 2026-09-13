@@ -1,5 +1,6 @@
-/* Slice 2+ — slim Okbay atlas chrome: Fuse sidebar + wiki modal + label controls + locate.
- * CE cues from wiki-view sidebar.js / modal.js / atlas.js initAtlasControls; deliberately thinner.
+/* Slice 2+ — Okbay atlas chrome: Fuse sidebar, wiki modal, labels/edges, ingest,
+ * workspace switcher, minimap toggle, viewer toggle, keybindings, help.
+ * CE cues from wiki-view sidebar.js / modal.js / atlas.js initAtlasControls.
  */
 (function (global) {
   'use strict';
@@ -32,6 +33,9 @@
   var LABEL_DEFAULTS = ['concept', 'entity', 'note', 'todo-list'];
   var LABEL_TYPES_KEY = 'okbay.label-types';
   var LABEL_MODE_KEY = 'okbay.label-mode';
+  var EDGE_MODE_KEY = 'okbay.edge-mode';
+  var VIEWER_KEY = 'okbay.viewer';
+  var MINIMAP_KEY = 'okbay.minimap';
 
   function canonicalType(t) {
     var key = String(t || '').toLowerCase();
@@ -299,11 +303,14 @@
     }
   };
 
-  /* ── Label / type controls (CE initAtlasControls slim port) ───── */
+  /* ── Label / type / edge controls (CE initAtlasControls slim port) ─ */
   var Controls = {
     handle: null,
     mode: 'auto',
+    edgeMode: 'auto',
     types: null,
+    onViewerToggle: null,
+    onToast: null,
 
     readTypes: function () {
       try {
@@ -317,18 +324,27 @@
       opts = opts || {};
       this.handle = handle;
       this.types = this.readTypes();
+      this.onViewerToggle = opts.onViewerToggle || null;
+      this.onToast = opts.onToast || null;
       try {
         var m = localStorage.getItem(LABEL_MODE_KEY);
         if (m === 'auto' || m === 'on' || m === 'off') this.mode = m;
       } catch (e) {}
+      try {
+        var em = localStorage.getItem(EDGE_MODE_KEY);
+        if (em === 'auto' || em === 'on' || em === 'off') this.edgeMode = em;
+      } catch (e) {}
       var modeButton = document.getElementById('label-mode');
       var modeState = document.getElementById('label-mode-state');
+      var edgeButton = document.getElementById('edge-mode');
+      var edgeState = document.getElementById('edge-mode-state');
       var typeButton = document.getElementById('label-types');
       var typeState = document.getElementById('label-types-state');
       var typePanel = document.getElementById('label-types-panel');
+      var viewerButton = document.getElementById('viewer-mode');
       var self = this;
 
-      function paint() {
+      function paintLabels() {
         if (modeState) modeState.textContent = self.mode;
         if (typeState) typeState.textContent = self.types.size + '/12';
         document.documentElement.dataset.labels = self.mode;
@@ -336,14 +352,34 @@
           self.handle.setLabels(self.mode, Array.from(self.types));
         }
       }
+      function paintEdges() {
+        if (edgeState) edgeState.textContent = self.edgeMode;
+        document.documentElement.dataset.edges = self.edgeMode;
+        if (self.handle && typeof self.handle.setEdges === 'function') {
+          self.handle.setEdges(self.edgeMode);
+        }
+      }
+      function paint() {
+        paintLabels();
+        paintEdges();
+      }
       this.paint = paint;
+      this.paintLabels = paintLabels;
+      this.paintEdges = paintEdges;
 
       if (modeButton) {
-        modeButton.addEventListener('click', function () {
-          var order = ['auto', 'on', 'off'];
-          self.mode = order[(order.indexOf(self.mode) + 1) % order.length];
-          try { localStorage.setItem(LABEL_MODE_KEY, self.mode); } catch (e) {}
-          paint();
+        modeButton.addEventListener('click', function () { self.cycleMode(); });
+      }
+      if (edgeButton) {
+        edgeButton.classList.remove('hidden');
+        edgeButton.hidden = false;
+        edgeButton.addEventListener('click', function () { self.cycleEdgeMode(); });
+      }
+      if (viewerButton) {
+        viewerButton.classList.remove('hidden');
+        viewerButton.hidden = false;
+        viewerButton.addEventListener('click', function () {
+          if (typeof self.onViewerToggle === 'function') self.onViewerToggle();
         });
       }
 
@@ -359,7 +395,7 @@
             try {
               localStorage.setItem(LABEL_TYPES_KEY, JSON.stringify(Array.from(self.types)));
             } catch (e) {}
-            paint();
+            paintLabels();
           });
         });
         typeButton.addEventListener('click', function (ev) {
@@ -377,7 +413,7 @@
             try {
               localStorage.setItem(LABEL_TYPES_KEY, JSON.stringify(Array.from(self.types)));
             } catch (e) {}
-            paint();
+            paintLabels();
           });
         }
         document.addEventListener('click', function (ev) {
@@ -396,8 +432,31 @@
       var order = ['auto', 'on', 'off'];
       this.mode = order[(order.indexOf(this.mode) + 1) % order.length];
       try { localStorage.setItem(LABEL_MODE_KEY, this.mode); } catch (e) {}
-      if (typeof this.paint === 'function') this.paint();
+      if (typeof this.paintLabels === 'function') this.paintLabels();
+      else if (typeof this.paint === 'function') this.paint();
       return this.mode;
+    },
+
+    cycleEdgeMode: function () {
+      var order = ['auto', 'on', 'off'];
+      this.edgeMode = order[(order.indexOf(this.edgeMode) + 1) % order.length];
+      try { localStorage.setItem(EDGE_MODE_KEY, this.edgeMode); } catch (e) {}
+      if (typeof this.paintEdges === 'function') this.paintEdges();
+      else if (typeof this.paint === 'function') this.paint();
+      if (typeof this.onToast === 'function') this.onToast('edges:' + this.edgeMode);
+      return this.edgeMode;
+    },
+
+    setViewerState: function (mode) {
+      var state = document.getElementById('viewer-mode-state');
+      var btn = document.getElementById('viewer-mode');
+      if (state) state.textContent = mode;
+      if (btn) {
+        btn.title = mode === 'atlas' ? 'Switch to classic force graph (v)' : 'Switch to Knowledge Atlas (v)';
+        btn.classList.remove('hidden');
+        btn.hidden = false;
+      }
+      document.documentElement.dataset.viewer = mode;
     },
 
     isTypesPanelOpen: function () {
@@ -415,6 +474,261 @@
       if (!typePanel) return false;
       typePanel.classList.toggle('hidden');
       return !typePanel.classList.contains('hidden');
+    },
+
+    toggleMinimap: function () {
+      var mm = document.querySelector('canvas.atlas-minimap');
+      if (!mm) return null;
+      mm.hidden = !mm.hidden;
+      try { localStorage.setItem(MINIMAP_KEY, mm.hidden ? 'off' : 'on'); } catch (e) {}
+      document.documentElement.dataset.atlasMinimap = mm.hidden ? 'hidden' : 'visible';
+      return !mm.hidden;
+    },
+
+    applyMinimapPref: function () {
+      var mm = document.querySelector('canvas.atlas-minimap');
+      if (!mm) return;
+      try {
+        if (localStorage.getItem(MINIMAP_KEY) === 'off') mm.hidden = true;
+      } catch (e) {}
+      document.documentElement.dataset.atlasMinimap = mm.hidden ? 'hidden' : 'visible';
+    }
+  };
+
+  /* ── Ingest (+) ─────────────────────────────────────────────────── */
+  var Ingest = {
+    api: '',
+    onToast: null,
+    init: function (opts) {
+      opts = opts || {};
+      this.api = opts.api || location.origin;
+      this.onToast = opts.onToast || null;
+      var btn = document.getElementById('ingest-add');
+      var self = this;
+      if (btn) btn.addEventListener('click', function () { self.promptAndIngest(); });
+    },
+    promptAndIngest: function () {
+      var path = window.prompt('Ingest file or folder path (absolute or ~):', '');
+      if (path == null) return;
+      path = String(path).trim();
+      if (!path) return;
+      this.ingest(path, false);
+    },
+    ingest: function (path, confirm) {
+      var self = this;
+      var body = { path: path };
+      if (confirm) body.confirm = true;
+      return fetch(this.api + '/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(function (r) { return r.json(); }).then(function (doc) {
+        if (doc && doc.needs_confirm) {
+          var ok = window.confirm((doc.reason || 'Privacy gate') + '\n\nConfirm ingest anyway?');
+          if (ok) return self.ingest(path, true);
+          if (typeof self.onToast === 'function') self.onToast('ingest cancelled');
+          return doc;
+        }
+        if (doc && doc.ok) {
+          if (typeof self.onToast === 'function') {
+            self.onToast('ingested · ' + (doc.stem || path));
+          }
+        } else if (typeof self.onToast === 'function') {
+          self.onToast('ingest failed · ' + ((doc && (doc.error || doc.reason)) || 'unknown'));
+        }
+        return doc;
+      }).catch(function (e) {
+        if (typeof self.onToast === 'function') self.onToast('ingest error · ' + e);
+      });
+    }
+  };
+
+  /* ── Workspace switcher ─────────────────────────────────────────── */
+  var Workspace = {
+    api: '',
+    onToast: null,
+    onSwitched: null,
+    init: function (opts) {
+      opts = opts || {};
+      this.api = opts.api || location.origin;
+      this.onToast = opts.onToast || null;
+      this.onSwitched = opts.onSwitched || null;
+      var btn = document.getElementById('workspace-switch');
+      var panel = document.getElementById('workspace-panel');
+      var addBtn = document.getElementById('workspace-add');
+      var splitBtn = document.getElementById('workspace-split');
+      var self = this;
+      if (btn) btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        self.toggle();
+      });
+      if (addBtn) addBtn.addEventListener('click', function () { self.promptAdd(); });
+      if (splitBtn) splitBtn.addEventListener('click', function () { self.promptSplit(); });
+      document.addEventListener('click', function (ev) {
+        if (!panel || panel.classList.contains('hidden')) return;
+        if (panel.contains(ev.target) || (btn && (ev.target === btn || btn.contains(ev.target)))) return;
+        panel.classList.add('hidden');
+      });
+      this.refreshChip();
+    },
+    isOpen: function () {
+      var panel = document.getElementById('workspace-panel');
+      return !!(panel && !panel.classList.contains('hidden'));
+    },
+    close: function () {
+      var panel = document.getElementById('workspace-panel');
+      if (panel) panel.classList.add('hidden');
+    },
+    toggle: function () {
+      var panel = document.getElementById('workspace-panel');
+      if (!panel) return;
+      if (panel.classList.contains('hidden')) {
+        this.open();
+      } else {
+        panel.classList.add('hidden');
+      }
+    },
+    open: function () {
+      var panel = document.getElementById('workspace-panel');
+      if (!panel) return;
+      panel.classList.remove('hidden');
+      this.refresh();
+    },
+    refreshChip: function () {
+      var chip = document.getElementById('workspace-chip');
+      var self = this;
+      fetch(this.api + '/api/workspace/list')
+        .then(function (r) { return r.json(); })
+        .then(function (doc) {
+          var name = doc.active || '';
+          if (!name && doc.workspaces) {
+            var cur = doc.current || '';
+            Object.keys(doc.workspaces).forEach(function (k) {
+              if (String(doc.workspaces[k]) === cur) name = k;
+            });
+          }
+          if (chip) chip.textContent = name || 'workspace';
+          document.documentElement.dataset.workspace = name || '';
+        }).catch(function () {});
+    },
+    refresh: function () {
+      var list = document.getElementById('workspace-list');
+      var self = this;
+      if (!list) return;
+      list.innerHTML = '<div class="sidebar-empty">Loading…</div>';
+      fetch(this.api + '/api/workspace/list')
+        .then(function (r) { return r.json(); })
+        .then(function (doc) {
+          var named = doc.workspaces || {};
+          var active = doc.active || '';
+          var keys = Object.keys(named).sort();
+          if (!keys.length) {
+            list.innerHTML = '<div class="sidebar-empty">No workspaces</div>';
+            return;
+          }
+          list.innerHTML = '';
+          keys.forEach(function (name) {
+            var row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'workspace-row';
+            row.dataset.name = name;
+            if (name === active) row.dataset.active = 'true';
+            row.innerHTML = '<span class="ws-name">' + escapeHtml(name) + '</span>' +
+              '<span class="ws-path">' + escapeHtml(named[name]) + '</span>';
+            row.addEventListener('click', function () { self.use(name); });
+            list.appendChild(row);
+          });
+          self.refreshChip();
+        }).catch(function (e) {
+          list.innerHTML = '<div class="sidebar-empty">Failed: ' + escapeHtml(String(e)) + '</div>';
+        });
+    },
+    use: function (name) {
+      var self = this;
+      return fetch(this.api + '/api/workspace/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name })
+      }).then(function (r) { return r.json(); }).then(function (doc) {
+        if (doc && doc.ok) {
+          if (typeof self.onToast === 'function') self.onToast('workspace · ' + name);
+          self.close();
+          if (typeof self.onSwitched === 'function') self.onSwitched(doc);
+          else window.location.reload();
+        } else if (typeof self.onToast === 'function') {
+          self.onToast('workspace failed · ' + ((doc && doc.error) || name));
+        }
+        return doc;
+      });
+    },
+    promptAdd: function () {
+      var name = window.prompt('Workspace name (e.g. biocure):', '');
+      if (!name) return;
+      var path = window.prompt('Workspace path (vault/wiki hub):', '');
+      if (!path) return;
+      var self = this;
+      fetch(this.api + '/api/workspace/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), path: path.trim() })
+      }).then(function (r) { return r.json(); }).then(function (doc) {
+        if (doc && doc.ok) {
+          if (typeof self.onToast === 'function') self.onToast('added · ' + name);
+          self.refresh();
+        } else if (typeof self.onToast === 'function') {
+          self.onToast('add failed · ' + ((doc && doc.error) || ''));
+        }
+      });
+    },
+    promptSplit: function () {
+      var name = window.prompt('Focused workspace name:', '');
+      if (!name) return;
+      var paths = window.prompt('Work subfolder path(s), comma-separated:', '');
+      if (!paths) return;
+      var self = this;
+      var list = paths.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      fetch(this.api + '/api/workspace/split', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), paths: list })
+      }).then(function (r) { return r.json(); }).then(function (doc) {
+        if (doc && doc.ok) {
+          if (typeof self.onToast === 'function') self.onToast('split · ' + name);
+          self.refresh();
+        } else if (typeof self.onToast === 'function') {
+          self.onToast('split failed · ' + ((doc && doc.error) || ''));
+        }
+      });
+    }
+  };
+
+  /* ── Help overlay ───────────────────────────────────────────────── */
+  var Help = {
+    init: function () {
+      var btn = document.getElementById('atlas-help-btn');
+      var panel = document.getElementById('atlas-help');
+      var close = document.getElementById('atlas-help-close');
+      var self = this;
+      if (btn) btn.addEventListener('click', function () { self.toggle(); });
+      if (close) close.addEventListener('click', function () { self.close(); });
+      if (panel) panel.addEventListener('click', function (ev) {
+        if (ev.target === panel) self.close();
+      });
+    },
+    isOpen: function () {
+      var panel = document.getElementById('atlas-help');
+      return !!(panel && !panel.classList.contains('hidden'));
+    },
+    open: function () {
+      var panel = document.getElementById('atlas-help');
+      if (panel) panel.classList.remove('hidden');
+    },
+    close: function () {
+      var panel = document.getElementById('atlas-help');
+      if (panel) panel.classList.add('hidden');
+    },
+    toggle: function () {
+      if (this.isOpen()) this.close(); else this.open();
     }
   };
 
@@ -652,8 +966,8 @@
   };
 
   /* ── In-page keybindings (ATLAS-KEYBINDINGS.md — implemented) ───
-   * Smoke: /, arrows, Ctrl+arrows, Alt+Left/Right, WASD, l, t, =/[ /], ., Enter, Shift+Enter, Backspace, p, Esc.
-   * Ignore letter/nav chords while typing in input/textarea/contenteditable (except Esc, Ctrl+F).
+   * Smoke: /, arrows, Ctrl+arrows, Alt+Left/Right, WASD, l, t, e, v, i, o, m, ?, =/[ /], ., Enter,
+   * Shift+Enter, Backspace, p, Esc. Ignore letter/nav while typing (except Esc, Ctrl+F).
    */
   var Keys = {
     handle: null,
@@ -670,6 +984,7 @@
       this.graphEl = opts.graphEl || document.getElementById('graph');
       this.onToast = opts.onToast || null;
       this.onOpenItem = opts.onOpenItem || null;
+      this.onViewerToggle = opts.onViewerToggle || null;
       this.helpers = global.OkbayAtlasKeyHelpers || null;
       this.navId = null;
       if (this._bound) {
@@ -913,10 +1228,20 @@
       var key = ev.key;
       var lower = key.length === 1 ? key.toLowerCase() : key;
 
-      // Escape: modal → types → blur/clear search
+      // Escape: help → modal → workspace → types → blur/clear search
       if (key === 'Escape') {
+        if (Help.isOpen()) {
+          Help.close();
+          ev.preventDefault();
+          return;
+        }
         if (modalOpen) {
           Modal.close();
+          ev.preventDefault();
+          return;
+        }
+        if (Workspace.isOpen()) {
+          Workspace.close();
           ev.preventDefault();
           return;
         }
@@ -999,6 +1324,11 @@
 
       if (ev.ctrlKey || ev.altKey) return;
 
+      if (key === '?' || (ev.shiftKey && key === '/')) {
+        Help.toggle();
+        ev.preventDefault();
+        return;
+      }
       if (lower === 'l') {
         Controls.cycleMode();
         ev.preventDefault();
@@ -1006,6 +1336,34 @@
       }
       if (lower === 't') {
         Controls.toggleTypesPanel();
+        ev.preventDefault();
+        return;
+      }
+      if (lower === 'e') {
+        Controls.cycleEdgeMode();
+        ev.preventDefault();
+        return;
+      }
+      if (lower === 'v') {
+        if (typeof this.onViewerToggle === 'function') this.onViewerToggle();
+        ev.preventDefault();
+        return;
+      }
+      if (lower === 'i') {
+        Ingest.promptAndIngest();
+        ev.preventDefault();
+        return;
+      }
+      if (lower === 'o') {
+        Workspace.toggle();
+        ev.preventDefault();
+        return;
+      }
+      if (lower === 'm') {
+        var shown = Controls.toggleMinimap();
+        if (typeof this.onToast === 'function' && shown !== null) {
+          this.onToast(shown ? 'minimap on' : 'minimap off');
+        }
         ev.preventDefault();
         return;
       }
@@ -1065,6 +1423,10 @@
     Modal: Modal,
     Controls: Controls,
     Keys: Keys,
+    Ingest: Ingest,
+    Workspace: Workspace,
+    Help: Help,
+    VIEWER_KEY: VIEWER_KEY,
     canonicalType: canonicalType,
     applyPalette: applyPalette
   };
