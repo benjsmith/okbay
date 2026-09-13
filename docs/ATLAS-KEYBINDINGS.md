@@ -73,7 +73,7 @@ From `/usr/share/omarchy/default/hypr/bindings/tiling.lua` + hotkeys manual:
 | **`Super + K`** | Keybindings viewer |
 | **`Super + F`** | Fullscreen |
 | **`Super + /`** | Monitor scaling step |
-| **`Super + Shift + O`** | Obsidian (preinstalled) |
+| **`Super + Shift + O`** | Obsidian (preinstalled). **Okstratr may override this chord** — OKBay does not; Atlas stays on **Super+Shift+K**. |
 | **`Super + C/V/X`** | Universal clipboard |
 
 **Implication:** any Atlas action that the user phrased as `Super+Arrow` or `Super+Alt+Arrow` **cannot** be a global Hyprland bind without unbinding core tiling. Under Chromium `--app=`, **Super never reaches the page** anyway (Hyprland consumes it). In-atlas navigation must use **non-Super** chords (or a future Hyprland submap / pass-through while Atlas is focused).
@@ -96,7 +96,7 @@ From `/usr/share/omarchy/default/hypr/bindings/tiling.lua` + hotkeys manual:
 
 | Action | Proposed chord | Layer | Notes |
 |--------|----------------|-------|-------|
-| Open / focus Atlas window | **`Super + Shift + K`** | Hypr | **Snippet ready** in `contrib/hypr-bindings.lua` (summon atlas surface). Merge into user `bindings.lua` to show in Super+K. |
+| Open / focus Atlas window | **`Super + Shift + K`** | Hypr | **`contrib/okbay-open-atlas.sh`** via `contrib/hypr-bindings.lua`. Exports `OMARCHY_PATH` (default `/usr/share/omarchy`), summons atlas, falls back to Chromium `--app=http://127.0.0.1:8766/atlas`. `setup.sh` installs the script + merges the bind. |
 | Open Reviews panel | *(already)* **`Super + Ctrl + 1`** | Hypr | Keep; document. Optional alias in Okbay menu only. |
 | **Focus search** | **`/`** (and optionally `Ctrl + F`) | Page | **Implemented.** Focus `#sidebar-search`, select-all if non-empty. Ignore when editable **except** Ctrl+F always (`preventDefault`). |
 | **Label mode cycle** | **`l`** | Page | **Implemented.** Cycle `auto → on → off` (`Controls.cycleMode`). |
@@ -180,7 +180,7 @@ then engine.hover / focus + light camera ease
    **Confirmed by Ben (2026-09-11):** Ctrl+Arrow = compass; Alt+Arrow = anti-/clockwise walk. Do **not** use Super+Arrow (Hyprland).
 
 2. **`Super + Shift + K` for open Atlas?**  
-   Snippet in `contrib/hypr-bindings.lua`; optional until merged into guest `bindings.lua`.
+   **Shipped:** `contrib/okbay-open-atlas.sh` + `hypr-bindings.lua`; `setup.sh` merges into `~/.config/hypr/bindings.lua`. Root cause when it fails: missing `OMARCHY_PATH` for `omarchy-shell`.
 
 3. **Arrows = spatial `nearestInDirection` (CE today) or true graph-neighbour BFS?**  
    React uses spatial. “Among neighbours” wording might mean edge-adjacent. Could do: arrows = spatial, Alt+arrows = ring of **graph** neighbours.

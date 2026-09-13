@@ -42,6 +42,35 @@ for f in manifest.json BarWidget.qml Overlay.qml Panel.qml Service.qml Model.js 
   [ -f "$REPO_ROOT/$f" ] && cp "$REPO_ROOT/$f" "$HOME/.config/omarchy/plugins/benjsmith.okbay/$f"
 done
 [ -f "$REPO_ROOT/contrib/okbay-menu.jsonc" ] && cp "$REPO_ROOT/contrib/okbay-menu.jsonc" "$HOME/.config/omarchy/extensions/okbay-menu.jsonc"
+# Atlas opener + Hypr bind snippet (Super+Shift+K). Omarchy default Super+Shift+O is Obsidian.
+mkdir -p "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib"
+if [ -f "$REPO_ROOT/contrib/okbay-open-atlas.sh" ]; then
+  install -m 0755 "$REPO_ROOT/contrib/okbay-open-atlas.sh"     "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh"
+  # Also keep a copy next to a src checkout if present
+  if [ -d "$HOME/src/okbay/contrib" ]; then
+    install -m 0755 "$REPO_ROOT/contrib/okbay-open-atlas.sh" "$HOME/src/okbay/contrib/okbay-open-atlas.sh"
+  fi
+fi
+BINDINGS_LUA="$HOME/.config/hypr/bindings.lua"
+if [ -f "$REPO_ROOT/contrib/hypr-bindings.lua" ]; then
+  mkdir -p "$HOME/.config/hypr"
+  if [ ! -f "$BINDINGS_LUA" ]; then
+    cp "$REPO_ROOT/contrib/hypr-bindings.lua" "$BINDINGS_LUA"
+    echo "==> installed $BINDINGS_LUA (Super+Shift+K → OKBay Atlas)"
+  elif ! grep -q 'okbay-open-atlas.sh' "$BINDINGS_LUA" 2>/dev/null; then
+    cat >> "$BINDINGS_LUA" <<'BINDEOF'
+
+-- OKBay Atlas (setup.sh); Omarchy Super+Shift+O remains Obsidian unless Okstratr overrides it.
+o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
+  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh",
+})
+BINDEOF
+    echo "==> merged Super+Shift+K Atlas bind into $BINDINGS_LUA"
+  else
+    echo "==> $BINDINGS_LUA already references okbay-open-atlas.sh"
+  fi
+fi
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now okbayd.service 2>/dev/null || echo "(systemd user unit not enabled)"
 echo "Okbay setup complete. Atlas: http://127.0.0.1:8766/atlas"
+echo "Hypr: Super+Shift+K → OKBay Atlas (helper sets OMARCHY_PATH). Super+Shift+O is Obsidian by default."
