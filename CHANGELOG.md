@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Wallpaper **v21**: EDSR×2 upscaled photographic wet-night plate (cached 3840×2160); tightened flush parallel bars (Δx≈3.35); **tiny crisp** silver end dots with outward nudge and **zero glow/halo** (no large grey orbs); droplet Switchbay reflections on photo floor.
+
 - Atlas **chrome parity** (Switchbay/CE): ingest **+** (`i`), workspace switcher (`o` + `/api/workspace/list|use|add`), edge mode auto/on/off (`e` + vendor `setEdges`), Atlas ↔ classic Graph toggle (`v` + slim D3), minimap toggle (`m`), in-chrome help (`?`). Vendored KnowledgeAtlas bump (setEdges) + `d3.min.js` / `classic-graph.js`.
 
 - Wallpaper **v20**: photographic wet-night plate full-frame (Lanczos upscale to 3440×1440 / 5120×2160; ultrawide height-fit + mirror side pads); SVG-faithful bar spacing (Δx=4) with ~4× supersample; smaller soft ball glow + transparent pad + crisp cores; v17-style droplet color reflections on the photo floor (no procedural sky/floor).
