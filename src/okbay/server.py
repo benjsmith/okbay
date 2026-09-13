@@ -115,6 +115,9 @@ class Handler(BaseHTTPRequestHandler):
             if payload is None:
                 return self._json({"error": "not found", "stem": stem}, 404)
             return self._json(payload)
+        if path in ("/api/workspace", "/api/workspace/list"):
+            from . import workroot
+            return self._json(workroot.list_workspaces())
         return self._json({"error": "not found"}, 404)
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -140,6 +143,26 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/coverage":
             from . import workroot
             return self._json(workroot.coverage_status())
+        if path in ("/api/workspace/list",):
+            from . import workroot
+            return self._json(workroot.list_workspaces())
+        if path == "/api/workspace/use":
+            from . import workroot
+            try:
+                return self._json(workroot.use_workspace(body.get("name") or body.get("workspace") or ""))
+            except KeyError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 404)
+            except ValueError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
+        if path == "/api/workspace/add":
+            from . import workroot
+            try:
+                return self._json(workroot.add_workspace(
+                    body.get("name") or "",
+                    body.get("path") or body.get("src") or "",
+                ))
+            except ValueError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
         if path == "/api/workspace/split":
             from . import workroot
             paths_in = body.get("paths") or body.get("path") or []

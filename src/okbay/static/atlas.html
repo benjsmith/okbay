@@ -210,7 +210,7 @@
   }
   .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
   .ctrl-label { color: var(--text-muted); font-weight: 400; }
-  #label-mode-state, #label-types-state, #viewer-mode-state {
+  #label-mode-state, #label-types-state, #viewer-mode-state, #edge-mode-state {
     color: var(--accent); font-weight: 600;
   }
   .label-types-panel {
@@ -250,6 +250,68 @@
   #status.focus-toast {
     color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
   }
+
+  /* Chrome parity: ingest / workspace / edges / help */
+  .brand-actions { display: flex; gap: 6px; align-items: center; }
+  .brand-actions .icon-btn { width: 28px; height: 28px; }
+  #workspace-chip {
+    max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11px; color: var(--text-muted); font-weight: 500;
+  }
+  #workspace-panel {
+    position: absolute; z-index: 30; top: 52px; left: 10px;
+    width: min(320px, calc(var(--sidebar-w) - 20px));
+    max-height: min(50vh, 360px);
+    display: flex; flex-direction: column;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.45); overflow: hidden;
+  }
+  #workspace-panel .ws-head {
+    padding: 8px 10px; border-bottom: 1px solid var(--line);
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--text-muted);
+  }
+  #workspace-list { flex: 1; overflow: auto; padding: 4px 0; }
+  .workspace-row {
+    width: 100%; display: flex; flex-direction: column; gap: 2px;
+    padding: 7px 12px; border: 0; background: transparent; color: var(--text);
+    cursor: pointer; font: inherit; text-align: left;
+  }
+  .workspace-row:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .workspace-row[data-active="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .ws-name { font-weight: 600; font-size: 12px; }
+  .ws-path { font-size: 10px; color: var(--text-faint); word-break: break-all; }
+  .ws-actions {
+    display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line);
+  }
+  .ws-actions button {
+    flex: 1; border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    border-radius: 6px; padding: 5px 8px; cursor: pointer; font: inherit; font-size: 11px;
+  }
+  .ws-actions button:hover { border-color: var(--accent); color: var(--accent); }
+  #label-mode-state, #label-types-state, #viewer-mode-state, #edge-mode-state {
+    color: var(--accent); font-weight: 600;
+  }
+  #atlas-help {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #atlas-help-card {
+    width: min(520px, 92vw); max-height: 80vh; overflow: auto;
+    background: var(--bg-elev); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.5); padding: 16px 18px 18px;
+  }
+  #atlas-help-card h2 { margin: 0 0 10px; font-size: 15px; }
+  #atlas-help-card table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #atlas-help-card td { padding: 4px 6px; vertical-align: top; border-bottom: 1px solid var(--line); }
+  #atlas-help-card td.k { width: 7.5rem; color: var(--accent); font-family: ui-monospace, monospace; white-space: nowrap; }
+  #atlas-help-close {
+    float: right; border: 1px solid var(--line); background: transparent;
+    color: var(--text-muted); border-radius: 6px; width: 28px; height: 28px; cursor: pointer;
+  }
+  #sidebar { position: relative; }
+  svg.classic-graph { width: 100%; height: 100%; }
 </style>
 </head>
 <body>
@@ -258,7 +320,14 @@
     <div id="sidebar-header">
       <div class="brand">
         <span>OKBay Atlas</span>
-        <span id="meta-counts"></span>
+        <span class="brand-actions">
+          <button id="ingest-add" class="icon-btn" type="button" title="Add / ingest file or folder (i)" aria-label="Ingest file or folder">+</button>
+          <button id="workspace-switch" class="icon-btn" type="button" title="Switch workspace (o)" aria-label="Switch workspace">
+            <span id="workspace-chip">ws</span>
+          </button>
+          <button id="atlas-help-btn" class="icon-btn" type="button" title="Keybindings (?)" aria-label="Keybindings help">?</button>
+          <span id="meta-counts"></span>
+        </span>
       </div>
       <div class="sidebar-search-wrap">
         <input id="sidebar-search" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false"/>
@@ -272,6 +341,14 @@
         </button>
       </div>
     </div>
+    <div id="workspace-panel" class="hidden" role="dialog" aria-label="Workspaces">
+      <div class="ws-head">Workspaces</div>
+      <div id="workspace-list"></div>
+      <div class="ws-actions">
+        <button id="workspace-add" type="button" title="Register a named workspace">Add</button>
+        <button id="workspace-split" type="button" title="Split Work folders into a focused workspace">Split</button>
+      </div>
+    </div>
     <div id="sidebar-list" role="listbox"></div>
   </aside>
   <div id="graph-pane">
@@ -280,13 +357,16 @@
     <!-- Controls AFTER #graph (CE DOM order) so they stack above the canvas.
          Classic/Atlas chooser stays hidden when corpus > MIN_ATLAS_PAGES (360). -->
     <div class="graph-controls" id="graph-controls" aria-label="Atlas label controls">
-      <button id="viewer-mode" class="ctrl-btn hidden" type="button" title="Switch graph viewer" aria-label="Switch graph viewer" hidden>
+      <button id="viewer-mode" class="ctrl-btn" type="button" title="Switch graph viewer (v)" aria-label="Switch graph viewer">
         <span class="ctrl-label">view:</span><span id="viewer-mode-state">atlas</span>
       </button>
-      <button id="label-mode" class="ctrl-btn" type="button" title="Label visibility" aria-label="Label visibility">
+      <button id="label-mode" class="ctrl-btn" type="button" title="Label visibility (l)" aria-label="Label visibility">
         <span class="ctrl-label">labels:</span><span id="label-mode-state">auto</span>
       </button>
-      <button id="label-types" class="ctrl-btn" type="button" title="Which page types show labels" aria-label="Which page types show labels">
+      <button id="edge-mode" class="ctrl-btn" type="button" title="Edge visibility (e)" aria-label="Edge visibility">
+        <span class="ctrl-label">edges:</span><span id="edge-mode-state">auto</span>
+      </button>
+      <button id="label-types" class="ctrl-btn" type="button" title="Which page types show labels (t)" aria-label="Which page types show labels">
         <span class="ctrl-label">types:</span><span id="label-types-state">4/12</span>
       </button>
       <div id="label-types-panel" class="label-types-panel hidden" role="dialog" aria-label="Label types">
@@ -327,9 +407,38 @@
     <div id="modal-body"></div>
   </div>
 </div>
+
+<div id="atlas-help" class="hidden" aria-hidden="true">
+  <div id="atlas-help-card" role="dialog" aria-modal="true" aria-label="Atlas keybindings">
+    <button id="atlas-help-close" type="button" title="Close" aria-label="Close">×</button>
+    <h2>Atlas keybindings</h2>
+    <table>
+      <tr><td class="k">/</td><td>Focus search</td></tr>
+      <tr><td class="k">i</td><td>Ingest file/folder (+)</td></tr>
+      <tr><td class="k">o</td><td>Workspace switcher</td></tr>
+      <tr><td class="k">v</td><td>Toggle Atlas ↔ Graph (classic)</td></tr>
+      <tr><td class="k">e</td><td>Cycle edge rendering auto → on → off</td></tr>
+      <tr><td class="k">l</td><td>Cycle label mode</td></tr>
+      <tr><td class="k">t</td><td>Types popup</td></tr>
+      <tr><td class="k">m</td><td>Toggle corner minimap</td></tr>
+      <tr><td class="k">WASD</td><td>Pan (Shift = larger)</td></tr>
+      <tr><td class="k">Arrows</td><td>Spatial neighbour step</td></tr>
+      <tr><td class="k">Ctrl+Arrows</td><td>Compass from view centre</td></tr>
+      <tr><td class="k">Alt+←/→</td><td>Walk neighbours anti/clockwise</td></tr>
+      <tr><td class="k">.</td><td>Re-focus / centre highlight</td></tr>
+      <tr><td class="k">Enter</td><td>Focus · Shift+Enter open page</td></tr>
+      <tr><td class="k">p</td><td>Pin</td></tr>
+      <tr><td class="k">Backspace</td><td>Trail back</td></tr>
+      <tr><td class="k">?</td><td>This help</td></tr>
+      <tr><td class="k">Esc</td><td>Close help / modal / panels</td></tr>
+    </table>
+  </div>
+</div>
 <script src="/static/vendor/knowledge-atlas.js"></script>
 <script src="/static/vendor/fuse.min.js"></script>
+<script src="/static/vendor/d3.min.js"></script>
 <script src="/static/atlas-keys-helpers.js"></script>
+<script src="/static/classic-graph.js"></script>
 <script src="/static/atlas-chrome.js"></script>
 <script>
 (function () {
@@ -379,38 +488,60 @@
     }
   }
 
-  /* CE wiki-view atlas.js: Classic only offered when pages ≤ MIN_ATLAS_PAGES.
-     Biocure-scale (≥360) is Atlas-only — never show the classic switcher. */
-  var MIN_ATLAS_PAGES = 360;
+  /* Viewer preference: ?viewer=atlas|classic > localStorage > atlas default.
+     Toggle reloads like CE so Atlas canvas and classic D3 lifecycles stay independent. */
+  var VIEWER_KEY = (window.OkbayAtlasChrome && OkbayAtlasChrome.VIEWER_KEY) || 'okbay.viewer';
+
+  function resolveViewer() {
+    try {
+      var q = new URLSearchParams(location.search).get('viewer');
+      if (q === 'atlas' || q === 'classic') return q;
+    } catch (e) {}
+    try {
+      var s = localStorage.getItem(VIEWER_KEY);
+      if (s === 'atlas' || s === 'classic') return s;
+    } catch (e2) {}
+    return 'atlas';
+  }
+
+  function toggleViewer() {
+    var cur = resolveViewer();
+    var next = cur === 'atlas' ? 'classic' : 'atlas';
+    try { localStorage.setItem(VIEWER_KEY, next); } catch (e) {}
+    try {
+      var url = new URL(location.href);
+      url.searchParams.delete('viewer');
+      location.assign(url.toString());
+    } catch (e2) {
+      location.reload();
+    }
+  }
 
   function focusInAtlas(id) {
-    if (!id || !handle || !handle.engine || typeof handle.engine.focus !== 'function') return;
-    try { handle.engine.focus(id, 'user'); } catch (e) {}
+    if (!id) return;
+    if (handle && handle.engine && typeof handle.engine.focus === 'function') {
+      try { handle.engine.focus(id, 'user'); } catch (e) {}
+      return;
+    }
+    var classic = window.__okbayClassicHandle;
+    if (classic && typeof classic.focus === 'function') classic.focus(id);
   }
 
   function highlightNodes(ids) {
-    if (!handle || !handle.engine) return;
     var list = Array.isArray(ids) ? ids.filter(Boolean) : [];
-    try {
-      if (typeof handle.engine.select === 'function') {
-        handle.engine.select(list, 'replace');
-      }
-      if (list.length && typeof handle.engine.focus === 'function') {
-        handle.engine.focus(list[0], 'system');
-      }
-    } catch (e) {}
-  }
-
-  function gateClassicChooser(pageCount) {
-    var btn = document.getElementById('viewer-mode');
-    if (!btn) return;
-    /* Hide classic entirely above the CE threshold (or if classic is absent). */
-    var show = false; // Okbay has no classic viewer yet; keep gated even if ≤360.
-    if (pageCount > MIN_ATLAS_PAGES) show = false;
-    btn.classList.toggle('hidden', !show);
-    btn.hidden = !show;
-    document.documentElement.dataset.classicHidden =
-      pageCount > MIN_ATLAS_PAGES ? 'over-threshold' : 'no-classic';
+    if (handle && handle.engine) {
+      try {
+        if (typeof handle.engine.select === 'function') {
+          handle.engine.select(list, 'replace');
+        }
+        if (list.length && typeof handle.engine.focus === 'function') {
+          handle.engine.focus(list[0], 'system');
+        }
+      } catch (e) {}
+      return;
+    }
+    var classic = window.__okbayClassicHandle;
+    if (classic && list.length && typeof classic.focus === 'function') classic.focus(list[0]);
   }
 
   function toastFocus(id) {
@@ -457,10 +588,6 @@
   }
 
   async function boot() {
-    if (!window.KnowledgeAtlas || typeof window.KnowledgeAtlas.mount !== 'function') {
-      setStatus('KnowledgeAtlas IIFE missing — check /static/vendor/knowledge-atlas.js', true);
-      return;
-    }
     if (!window.OkbayAtlasChrome) {
       setStatus('atlas-chrome.js failed to load', true);
       return;
@@ -482,6 +609,21 @@
       counts.textContent = corpusSize + ' · ' + ((ceData.edges || []).length) + ' links';
     }
 
+    var viewerMode = resolveViewer();
+    document.body.dataset.viewer = viewerMode;
+
+    function toastMsg(msg) {
+      setStatus(msg || '');
+      if (statusEl) statusEl.classList.add('focus-toast');
+      clearTimeout(toastMsg._t);
+      toastMsg._t = setTimeout(function () {
+        if (statusEl && statusEl.classList.contains('focus-toast') && !statusEl.classList.contains('error')) {
+          statusEl.classList.remove('focus-toast');
+          setStatus('');
+        }
+      }, 2800);
+    }
+
     OkbayAtlasChrome.Sidebar.init(ceData, {
       onSelect: function (id) { openPage(id); },
       onHighlight: function (ids) { highlightNodes(ids); }
@@ -493,78 +635,124 @@
       onLocate: function (doc) {
         if (!doc || !doc.ok) return;
         var n = (doc.files && doc.files.length) || (doc.sources && doc.sources.length) || 0;
-        setStatus('Locate · ' + (doc.stem || '') + (n ? (' · ' + n + ' path(s)') : ''));
-        if (statusEl) statusEl.classList.add('focus-toast');
+        toastMsg('Locate · ' + (doc.stem || '') + (n ? (' · ' + n + ' path(s)') : ''));
       }
     });
+    OkbayAtlasChrome.Ingest.init({ api: api, onToast: toastMsg });
+    OkbayAtlasChrome.Workspace.init({
+      api: api,
+      onToast: toastMsg,
+      onSwitched: function () { location.reload(); }
+    });
+    OkbayAtlasChrome.Help.init();
 
     graphEl.innerHTML = '';
-    try {
-      // Hard maxAggregates:0 — aggregates (type-bubble shells) unsupported / not offered.
-      // Pin full-graph capacity so the scene is real nodes only; unlocks force network
-      // layout (not squircle core) and feeds the corner AtlasMinimap from the primary scene.
-      var edgeCount = (ceData.edges || []).length;
-      handle = window.KnowledgeAtlas.mount(graphEl, {
-        data: ceData,
-        config: {
-          layout: 'hybrid',
-          corpusSize: corpusSize,
-          coreCapacity: Math.max(1, corpusSize),
-          maxVisibleNodes: Math.max(1, corpusSize),
-          budget: {
-            maxNodes: Math.max(1, corpusSize),
-            maxAggregates: 0,
-            maxEdges: Math.max(900, edgeCount)
+    var classicHandle = null;
+
+    if (viewerMode === 'classic') {
+      if (!window.OkbayClassicGraph || !window.d3) {
+        setStatus('Classic viewer missing d3 / classic-graph.js — falling back to Atlas', true);
+        viewerMode = 'atlas';
+      } else {
+        try {
+          classicHandle = new window.OkbayClassicGraph();
+          classicHandle.init(graphEl, ceData, { onOpen: onOpenItem });
+          window.__okbayClassicHandle = classicHandle;
+          document.title = 'OKBay Graph · n=' + corpusSize;
+          if (classicHandle._truncated) {
+            toastMsg('classic · capped for performance · ' + classicHandle._counts.nodes + '/' + classicHandle._counts.total);
           }
-        },
-        onOpenItem: onOpenItem,
-        onEvent: function (ev) {
-          if (ev.kind !== 'scene-ready' || !ev.stats) return;
-          var s = ev.stats;
-          document.documentElement.dataset.atlasNodes = String(s.nodeCount);
-          document.documentElement.dataset.atlasEdges = String(s.edgeCount);
-          document.title = 'OKBay Atlas · n=' + s.nodeCount + ' e=' + s.edgeCount;
-          var mm = document.querySelector('canvas.atlas-minimap');
-          document.documentElement.dataset.atlasMinimap = mm ? (mm.hidden ? 'hidden' : 'visible') : 'missing';
-          setStatus('scene-ready · nodes=' + s.nodeCount + ' edges=' + s.edgeCount + ' · minimap=' + (document.documentElement.dataset.atlasMinimap || '?'));
+        } catch (e) {
+          setStatus('Classic mount failed: ' + (e && e.message ? e.message : e), true);
+          viewerMode = 'atlas';
         }
-      });
-    } catch (e) {
-      setStatus('KnowledgeAtlas.mount failed: ' + (e && e.message ? e.message : e), true);
-      return;
+      }
     }
 
-    window.__okbayAtlasHandle = handle;
+    if (viewerMode === 'atlas') {
+      if (!window.KnowledgeAtlas || typeof window.KnowledgeAtlas.mount !== 'function') {
+        setStatus('KnowledgeAtlas IIFE missing — check /static/vendor/knowledge-atlas.js', true);
+        return;
+      }
+      try {
+        // Hard maxAggregates:0 — aggregates unsupported. Policy A full-graph feeds AtlasMinimap.
+        var edgeCount = (ceData.edges || []).length;
+        var savedEdge = 'auto';
+        try {
+          var em = localStorage.getItem('okbay.edge-mode');
+          if (em === 'auto' || em === 'on' || em === 'off') savedEdge = em;
+        } catch (e0) {}
+        handle = window.KnowledgeAtlas.mount(graphEl, {
+          data: ceData,
+          edgeMode: savedEdge,
+          config: {
+            layout: 'hybrid',
+            corpusSize: corpusSize,
+            coreCapacity: Math.max(1, corpusSize),
+            maxVisibleNodes: Math.max(1, corpusSize),
+            budget: {
+              maxNodes: Math.max(1, corpusSize),
+              maxAggregates: 0,
+              maxEdges: Math.max(900, edgeCount)
+            }
+          },
+          onOpenItem: onOpenItem,
+          onEvent: function (ev) {
+            if (ev.kind !== 'scene-ready' || !ev.stats) return;
+            var s = ev.stats;
+            document.documentElement.dataset.atlasNodes = String(s.nodeCount);
+            document.documentElement.dataset.atlasEdges = String(s.edgeCount);
+            document.title = 'OKBay Atlas · n=' + s.nodeCount + ' e=' + s.edgeCount;
+            OkbayAtlasChrome.Controls.applyMinimapPref();
+            var mm = document.querySelector('canvas.atlas-minimap');
+            document.documentElement.dataset.atlasMinimap = mm ? (mm.hidden ? 'hidden' : 'visible') : 'missing';
+            setStatus('scene-ready · nodes=' + s.nodeCount + ' edges=' + s.edgeCount + ' · minimap=' + (document.documentElement.dataset.atlasMinimap || '?'));
+          }
+        });
+      } catch (e) {
+        setStatus('KnowledgeAtlas.mount failed: ' + (e && e.message ? e.message : e), true);
+        return;
+      }
+      window.__okbayAtlasHandle = handle;
+    }
+
     if (ceData.palette) OkbayAtlasChrome.applyPalette(ceData.palette);
 
-    /* Remount controls after KnowledgeAtlas.mount so they stay siblings of
-       #graph (never swallowed by the canvas) and visibly above it. */
+    /* Remount controls after mount so they stay siblings of #graph. */
     var pane = document.getElementById('graph-pane');
     var controlsEl = document.getElementById('graph-controls');
-    if (pane && controlsEl && controlsEl.parentElement !== pane) {
-      pane.appendChild(controlsEl);
-    } else if (pane && controlsEl) {
-      pane.appendChild(controlsEl); // ensure last child = top of stacking for z-auto peers
+    if (pane && controlsEl) pane.appendChild(controlsEl);
+
+    OkbayAtlasChrome.Controls.init(handle, {
+      onViewerToggle: toggleViewer,
+      onToast: toastMsg
+    });
+    OkbayAtlasChrome.Controls.setViewerState(viewerMode);
+    if (viewerMode === 'atlas') {
+      OkbayAtlasChrome.Controls.applyMinimapPref();
+    } else {
+      /* Edge / label engine APIs only apply to Atlas; buttons still cycle prefs for next Atlas visit. */
+      var edgeBtn = document.getElementById('edge-mode');
+      if (edgeBtn) edgeBtn.title = 'Edge visibility (Atlas only; preference saved) (e)';
     }
-    OkbayAtlasChrome.Controls.init(handle);
     OkbayAtlasChrome.Keys.init({
       handle: handle,
       graphEl: graphEl,
       onToast: toastFocus,
-      onOpenItem: onOpenItem
+      onOpenItem: onOpenItem,
+      onViewerToggle: toggleViewer
     });
-    gateClassicChooser(corpusSize);
     if (controlsEl) {
       controlsEl.style.display = 'flex';
       controlsEl.style.visibility = 'visible';
       controlsEl.style.opacity = '1';
-      controlsEl.setAttribute('data-mounted', 'after-atlas');
+      controlsEl.setAttribute('data-mounted', 'after-viewer');
     }
 
     window.addEventListener('hashchange', applyHash);
     if (location.hash.indexOf('#page=') === 0) applyHash();
 
-    setStatus('OKBay Atlas · ' + corpusSize + ' nodes · labels/types · hybrid (real nodes only)');
+    setStatus('OKBay ' + (viewerMode === 'classic' ? 'Graph' : 'Atlas') + ' · ' + corpusSize + ' nodes');
     setTimeout(function () {
       if (statusEl && !statusEl.classList.contains('error')) setStatus('');
     }, 3500);
@@ -576,6 +764,9 @@
   window.addEventListener('beforeunload', function () {
     if (window.OkbayAtlasChrome && OkbayAtlasChrome.Keys) OkbayAtlasChrome.Keys.destroy();
     if (handle && handle.destroy) handle.destroy();
+    if (window.__okbayClassicHandle && window.__okbayClassicHandle.destroy) {
+      window.__okbayClassicHandle.destroy();
+    }
   });
 })();
 </script>

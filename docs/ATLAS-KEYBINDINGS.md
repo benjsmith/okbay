@@ -1,7 +1,7 @@
 # Atlas keybindings for Okbay on Omarchy
 
-**Date:** 2026-09-11 (Europe/Zurich)  
-**Status:** In-page set **implemented** (2026-09-11, Ben confirmed Ctrl/Alt substitutions).  
+**Date:** 2026-09-13 (Europe/Zurich)  
+**Status:** In-page set **implemented** (+ chrome parity 2026-09-13: ingest, workspace, edges, viewer, minimap, help).  
 **Scope:** Match Omarchy’s binding + Super+K discovery pattern; Atlas chords that work under Chromium `--app=` kiosk.
 **Hypr:** optional `contrib/hypr-bindings.lua` (`Super+Shift+K` → Atlas) — merge into `~/.config/hypr/bindings.lua` when ready.
 
@@ -41,7 +41,7 @@ So Atlas actions do **not** “nest under Super+K” as a prefix menu. The Omarc
 | Bar widget | `BarWidget.qml` | Left click → Atlas; right click → Reviews panel |
 | Panel toggle | Omarchy bar layout | **`Super + Ctrl + 1`** → toggle first right-bar panel (`benjsmith.okbay`) — see `utilities.lua` panel loop + `~/.config/omarchy/shell.json` |
 | Atlas host | `Panel.qml` / `Overlay.qml` | Frameless `chromium --app=http://127.0.0.1:8766/atlas --start-fullscreen` (Qt WebEngine crash workaround) |
-| In-page keys | `atlas-chrome.js` | **Escape** closes wiki modal only. No `/`, arrows, or label chords yet. |
+| In-page keys | `atlas-chrome.js` | Full set: `/` WASD arrows Ctrl/Alt+Arrow `l` `t` `e` `v` `i` `o` `m` `?` `=`/`[`/`]` `.` Enter `p` Esc. |
 | Engine | Vendored `static/vendor/knowledge-atlas.js` (IIFE) | `hitTester.nearestInDirection` **present**; **no `keydown` listener** (keyboard lives only in React `KnowledgeAtlas.tsx`) |
 
 Plugin manifest (`manifest.json`) has no keybind kind — Hyprland Lua / menu JSONC / in-page is the path.
@@ -107,6 +107,12 @@ From `/usr/share/omarchy/default/hypr/bindings/tiling.lua` + hotkeys manual:
 | **Arrows among neighbours (smooth)** | **`← ↑ → ↓`** | Page | **Implemented.** `hitTester.nearestInDirection` + soft highlight (`hover`/`select` + synthetic pointermove). Window keydown + canvas autofocus. |
 | **Compass nearest** *(user: Super+arrows)* | **`Ctrl + Arrow`** | Page | **Implemented** (Ben confirmed). Stricter cone from viewport centre via `nearestInDirectionFromPoint`. Not Super (Hyprland). |
 | **Walk anti-/clockwise around neighbours** *(user: Super+Alt+Left/Right)* | **`Alt + ←` / `Alt + →`** | Page | **Implemented** (Ben confirmed). Graph-neighbour angular ring; spatial nearby fallback. Helpers in `atlas-keys-helpers.js`. |
+| **Edge mode cycle** | **`e`** | Page | **Implemented.** Cycle `auto → on → off` via `handle.setEdges` (vendor IIFE). |
+| **Atlas ↔ Graph toggle** | **`v`** | Page | **Implemented.** Reload with `okbay.viewer` localStorage (classic D3 ↔ Atlas). |
+| **Ingest (+)** | **`i`** | Page | **Implemented.** Prompt path → `POST /api/ingest` (confirm loop for privacy gate). |
+| **Workspace switcher** | **`o`** | Page | **Implemented.** Panel: list / use / add / split via `/api/workspace/*`. |
+| **Minimap toggle** | **`m`** | Page | **Implemented.** Toggle `canvas.atlas-minimap.hidden` (Atlas only). |
+| **Help overlay** | **`?`** | Page | **Implemented.** In-chrome keybindings cheat sheet. |
 | Enter / open | **`Enter`** / **`Shift + Enter`** | Page | **Implemented.** Enter = focus; Shift+Enter = openItem (modal). |
 | Back | **`Backspace`** | Page | **Implemented.** `engine.back()` when not in search input. |
 | Pin | **`p`** | Page | **Implemented.** `engine.pin` on nav/focus id. |
@@ -143,6 +149,7 @@ Keep the set small so Super+K stays scannable.
 1. ~~**Page keymap module**~~ — `OkbayAtlasChrome.Keys` in `atlas-chrome.js` + `atlas-keys-helpers.js` (**done**).
 2. ~~**Port arrow / Enter / Backspace / p**~~ (**done**, soft highlight via hover/select + pointermove).
 3. ~~**Add** `/`, `l`, `t`, `=`/`[`/`]`, WASD, `.`, Ctrl+Arrow, Alt+Arrow~~ (**done**).
+3b. ~~**Chrome parity** `e` edges, `v` viewer, `i` ingest, `o` workspace, `m` minimap, `?` help~~ (**done** 2026-09-13).
 4. **Hypr snippet:** `contrib/hypr-bindings.lua` shipped; user merge still optional.
 5. **Rebuild/vendor IIFE** only if we upstream keyboard into `packages/knowledge-atlas/src/iife.ts` (preferred long-term so CE wiki-view gets it too).
 6. **E2E:** helper unit tests in `tests/test_atlas_key_helpers.mjs`; Playwright kiosk smoke still future.
@@ -221,3 +228,19 @@ then engine.hover / focus + light camera ease
 3. **Port React keyboard onto the IIFE host** (or upstream) — `nearestInDirection` is already vendored; keydown is the missing piece.  
 4. **Add `Super + Shift + K`** → launch-or-focus Atlas; keep documenting **`Super + Ctrl + 1`** for Reviews.  
 5. **Ben confirmed** Ctrl/Alt substitutions; arrows = spatial `nearestInDirection`, Alt+arrows = graph-neighbour angular ring (spatial fallback).
+
+
+---
+
+## 8. Chrome parity keybinds (2026-09-13)
+
+| Chord | Control | API / surface |
+|-------|---------|---------------|
+| `i` / **+** button | Ingest path prompt | `POST /api/ingest` |
+| `o` / workspace chip | List / use / add / split | `GET /api/workspace/list`, `POST /api/workspace/{use,add,split}` |
+| `v` / **view:** button | Atlas ↔ classic Graph | localStorage `okbay.viewer` + reload |
+| `e` / **edges:** button | Edge strokes auto/on/off | `KnowledgeAtlas` `setEdges` |
+| `m` | Corner minimap show/hide | `canvas.atlas-minimap.hidden` |
+| `?` / **?** button | Help overlay | `#atlas-help` |
+
+Letters chosen to avoid `/` arrows WASD `l` `t` `p` `.` `=` `[` `]`.

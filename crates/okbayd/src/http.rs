@@ -9,8 +9,13 @@ const ATLAS: &str = include_str!("../../../src/okbay/static/atlas.html");
 const KNOWLEDGE_ATLAS_JS: &[u8] =
     include_bytes!("../../../src/okbay/static/vendor/knowledge-atlas.js");
 const FUSE_JS: &[u8] = include_bytes!("../../../src/okbay/static/vendor/fuse.min.js");
+const D3_JS: &[u8] = include_bytes!("../../../src/okbay/static/vendor/d3.min.js");
 const ATLAS_CHROME_JS: &[u8] =
     include_bytes!("../../../src/okbay/static/atlas-chrome.js");
+const ATLAS_KEYS_HELPERS_JS: &[u8] =
+    include_bytes!("../../../src/okbay/static/atlas-keys-helpers.js");
+const CLASSIC_GRAPH_JS: &[u8] =
+    include_bytes!("../../../src/okbay/static/classic-graph.js");
 
 pub fn serve(host: &str, port: u16) -> std::io::Result<()> {
     let ws = paths::ensure_workspace(None);
@@ -59,6 +64,15 @@ fn handle(mut stream: TcpStream, ws: &PathBuf) -> std::io::Result<()> {
     }
     if method == "GET" && path == "/static/atlas-chrome.js" {
         return write_resp(&mut stream, 200, "application/javascript", ATLAS_CHROME_JS);
+    }
+    if method == "GET" && path == "/static/atlas-keys-helpers.js" {
+        return write_resp(&mut stream, 200, "application/javascript", ATLAS_KEYS_HELPERS_JS);
+    }
+    if method == "GET" && path == "/static/classic-graph.js" {
+        return write_resp(&mut stream, 200, "application/javascript", CLASSIC_GRAPH_JS);
+    }
+    if method == "GET" && path == "/static/vendor/d3.min.js" {
+        return write_resp(&mut stream, 200, "application/javascript", D3_JS);
     }
     let payload: Value = if method == "GET" && path == "/health" {
         json!({"ok": true, "daemon": "rust"})
@@ -119,6 +133,29 @@ fn handle(mut stream: TcpStream, ws: &PathBuf) -> std::io::Result<()> {
     } else if method == "POST" && path == "/api/desk/start" {
         let body: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
         desks::start(ws, body["kind"].as_str().unwrap_or("curate"), body["objective"].as_str().unwrap_or(""))
+    } else if method == "GET" && (path == "/api/workspace" || path == "/api/workspace/list") {
+        // Python workroot has full registry; Rust surfaces the active hub so chrome still boots.
+        let hub = paths::default_workspace();
+        json!({
+            "work_root": hub.parent().map(|p| p.display().to_string()).unwrap_or_default(),
+            "workspaces": { "okbay": hub.display().to_string() },
+            "watch_roots": {},
+            "active": "okbay",
+            "current": ws.display().to_string(),
+            "opt_out": [],
+            "note": "named workspace registry is Python/okbayd; use python daemon for use/add/split"
+        })
+    } else if method == "POST" && path == "/api/workspace/use" {
+        let body: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
+        let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("okbay");
+        if name == "okbay" {
+            let hub = paths::ensure_workspace(Some(&paths::default_workspace()));
+            json!({"ok": true, "name": "okbay", "workspace": hub.display().to_string(), "watch_roots": []})
+        } else {
+            json!({"ok": false, "error": format!("rust daemon: unknown workspace {name} (use python okbayd for named workspaces)")})
+        }
+    } else if method == "POST" && (path == "/api/workspace/add" || path == "/api/workspace/split") {
+        json!({"ok": false, "error": "named workspace add/split requires python okbayd"})
     } else {
         json!({"error": "not found"})
     };
