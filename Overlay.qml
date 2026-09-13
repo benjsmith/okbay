@@ -24,10 +24,18 @@ Item {
   function open(payloadJson) {
     opened = true
     statusFile.reload()
+    // Delegate focus-or-launch to helper (skip summon → avoid recursion).
     Quickshell.execDetached([
       "sh", "-lc",
-      "pkill -f 'chromium.*8766/atlas' 2>/dev/null || true; " +
-      "chromium --ozone-platform=wayland --disable-gpu --app=" + root.atlasUrl + " --start-fullscreen >/tmp/okbay-atlas-chrome.log 2>&1 &"
+      "export OKBAY_SKIP_SUMMON=1 OKBAY_ATLAS_URL='" + root.atlasUrl + "'; " +
+      "for s in \"$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh\" " +
+      "\"$HOME/src/okbay/contrib/okbay-open-atlas.sh\"; do " +
+      "[ -x \"$s\" ] && exec \"$s\"; done; " +
+      "if command -v uwsm-app >/dev/null 2>&1; then " +
+      "nohup uwsm-app -- chromium --ozone-platform=wayland --app='" + root.atlasUrl + "' --start-fullscreen >/tmp/okbay-atlas-chrome.log 2>&1 & " +
+      "else " +
+      "nohup chromium --ozone-platform=wayland --app='" + root.atlasUrl + "' --start-fullscreen >/tmp/okbay-atlas-chrome.log 2>&1 & " +
+      "fi"
     ])
     // brief toast then auto-close overlay chrome
     closeTimer.restart()

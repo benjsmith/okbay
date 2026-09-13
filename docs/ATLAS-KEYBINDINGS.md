@@ -96,7 +96,7 @@ From `/usr/share/omarchy/default/hypr/bindings/tiling.lua` + hotkeys manual:
 
 | Action | Proposed chord | Layer | Notes |
 |--------|----------------|-------|-------|
-| Open / focus Atlas window | **`Super + Shift + K`** | Hypr | **`contrib/okbay-open-atlas.sh`** via `contrib/hypr-bindings.lua`. Exports `OMARCHY_PATH` (default `/usr/share/omarchy`), summons atlas, falls back to Chromium `--app=http://127.0.0.1:8766/atlas`. `setup.sh` installs the script + merges the bind. |
+| Open / focus Atlas window | **`Super + Shift + K`** | Hypr | **`contrib/okbay-open-atlas.sh`** via `contrib/hypr-bindings.lua`. Exports `OMARCHY_PATH`, best-effort `omarchy-shell -q … summon` (never treats summon success as done), then **always** focus existing Chromium Atlas or launch `chromium --ozone-platform=wayland --app=http://127.0.0.1:8766/atlas` (uwsm-app when available). `setup.sh` installs the script + merges the bind. |
 | Open Reviews panel | *(already)* **`Super + Ctrl + 1`** | Hypr | Keep; document. Optional alias in Okbay menu only. |
 | **Focus search** | **`/`** (and optionally `Ctrl + F`) | Page | **Implemented.** Focus `#sidebar-search`, select-all if non-empty. Ignore when editable **except** Ctrl+F always (`preventDefault`). |
 | **Label mode cycle** | **`l`** | Page | **Implemented.** Cycle `auto → on → off` (`Controls.cycleMode`). |
