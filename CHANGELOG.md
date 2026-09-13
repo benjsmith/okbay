@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Wallpaper **v20**: photographic wet-night plate full-frame (Lanczos upscale to 3440×1440 / 5120×2160; ultrawide height-fit + mirror side pads); SVG-faithful bar spacing (Δx=4) with ~4× supersample; smaller soft ball glow + transparent pad + crisp cores; v17-style droplet color reflections on the photo floor (no procedural sky/floor).
 - Atlas **Super+Shift+K** reopen: `okbay-open-atlas.sh` always focuses/launches Chromium (uwsm-app / Wayland); summon is best-effort only and no longer short-circuits when the plugin is already loaded. Soften Panel/Overlay `openAtlasWindow` (delegate to helper; no blanket `pkill`).
 
 - Wallpaper **v19**: tighter bar spacing (~3.3); smaller ball glow + pad (no clipped halo); near-black sky + Switchbay-palette nebulae; realistic stars; native wet black glass floor with procedural droplets + brand-color reflections (old plate grit optional only).
