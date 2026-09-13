@@ -3,9 +3,9 @@
 # Super+Shift+K → this script (see contrib/hypr-bindings.lua).
 # OMARCHY_PATH is required by omarchy-shell; SSH/some launches miss it.
 #
-# Always open/focus Atlas via Chromium. omarchy-shell summon often succeeds
-# without re-calling Panel.open()/openAtlasWindow() when the plugin is already
-# loaded — so summon success must NOT short-circuit Chromium.
+# Super+Shift+K must open exactly ONE Atlas Chromium. Do not also
+# omarchy-shell summon here: Panel.openAtlasWindow races this launcher
+# and produces a second window. Menu/extension paths may still summon.
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 export PATH="${HOME}/.local/bin:/usr/bin:${PATH}"
 
@@ -56,6 +56,10 @@ sys.exit(1)
   hyprctl dispatch focuswindow "address:${addr}" >/dev/null 2>&1
 }
 
+count_atlas_chromium() {
+  pgrep -f "${ATLAS_MATCH}" 2>/dev/null | wc -l | tr -d " "
+}
+
 launch_atlas_chromium() {
   if command -v uwsm-app >/dev/null 2>&1; then
     nohup uwsm-app -- chromium --ozone-platform=wayland --app="${ATLAS_URL}" --start-fullscreen \
@@ -67,27 +71,36 @@ launch_atlas_chromium() {
 }
 
 ensure_atlas_chromium() {
-  # Prefer focus existing Atlas Chromium; else launch. Only pkill when stale
-  # (process matches but no focusable window).
-  if pgrep -f "${ATLAS_MATCH}" >/dev/null 2>&1; then
-    if focus_atlas_window; then
-      return 0
-    fi
+  # Prefer focus existing Atlas Chromium; else launch once.
+  if focus_atlas_window; then
+    return 0
+  fi
+  if [[ "$(count_atlas_chromium)" -gt 0 ]]; then
+    # Process up but window not focusable yet — wait briefly, then focus or replace.
+    for _ in 1 2 3 4 5 6 7 8; do
+      sleep 0.15
+      if focus_atlas_window; then
+        return 0
+      fi
+    done
     pkill -f "${ATLAS_MATCH}" 2>/dev/null || true
-    sleep 0.15
+    sleep 0.2
   fi
   launch_atlas_chromium
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 0.15
+    focus_atlas_window && return 0
+  done
+  return 0
 }
 
-# Best-effort summon (plugin wake / Panel path) — never treat success as "done".
-# Panel/Overlay call this script with OKBAY_SKIP_SUMMON=1 to avoid summon→open recursion.
-if [[ -z "${OKBAY_SKIP_SUMMON:-}" ]] && command -v omarchy-shell >/dev/null 2>&1; then
+# Optional plugin wake only when explicitly requested (menu paths).
+# Default off: summon + Chromium was opening two Atlas windows on Super+Shift+K.
+if [[ "${OKBAY_DO_SUMMON:-0}" == "1" ]] && command -v omarchy-shell >/dev/null 2>&1; then
   omarchy-shell -q shell summon benjsmith.okbay '{"surface":"atlas"}' >/dev/null 2>&1 || true
-  # Give Panel a brief window to open Chromium when summon actually reaches openAtlasWindow.
-  for _ in 1 2 3 4 5; do
-    if pgrep -f "${ATLAS_MATCH}" >/dev/null 2>&1; then
-      focus_atlas_window && exit 0
-      break
+  for _ in 1 2 3 4 5 6 7 8; do
+    if focus_atlas_window; then
+      exit 0
     fi
     sleep 0.12
   done

@@ -7,8 +7,9 @@
 -- Note: Omarchy default Super+Shift+O is Obsidian (preinstalled). Okstratr may
 -- override that chord; OKBay Atlas uses Super+Shift+K and does not steal Obsidian.
 
--- Open / focus Atlas (summon best-effort; always Chromium focus-or-launch).
+-- Open / focus Atlas (single Chromium focus-or-launch; no plugin summon).
 -- Requires OMARCHY_PATH; the helper exports it when missing (SSH / non-Hypr envs).
+-- Summon raced Chromium and opened two windows — keep Super+Shift+K Chromium-only.
 o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
   launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh",
 })
