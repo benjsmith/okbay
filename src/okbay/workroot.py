@@ -249,6 +249,10 @@ def use_workspace(name: str) -> dict[str, Any]:
     cfg["workspaces"] = workspaces
     cfg["active_workspace"] = name
     save_coverage(cfg)
+    # Drop prior wiki's stem index and warm the new workspace in background.
+    from . import wiki as _wiki
+    _wiki.invalidate_stem_index()
+    _wiki.warm_stem_index_background(paths.wiki(dest))
     return {
         "ok": True,
         "name": name,

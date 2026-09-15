@@ -1,6 +1,9 @@
 """Markdown wiki pages with YAML-ish frontmatter and wikilinks."""
 from __future__ import annotations
+import json
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -112,38 +115,174 @@ def write_page(wiki_dir: Path | None = None, stem: str = "", title: str = "", bo
 _STEM_INDEX: dict[str, Path] = {}
 _STEM_INDEX_ROOT: Path | None = None
 _STEM_INDEX_BUILT_AT: float = 0.0
+_STEM_INDEX_LOCK = threading.RLock()
+_STEM_WARM_GEN = 0
 
 
 def _wiki_mtime(directory: Path) -> float:
+    """Best-effort wiki tree freshness: directory mtime (may lag on some mounts)."""
     try:
         return directory.stat().st_mtime
     except OSError:
         return 0.0
 
 
-def _stem_index(directory: Path) -> dict[str, Path]:
-    """Map file-stem → path. Built once per wiki root; avoids parsing 39k pages per modal open."""
-    global _STEM_INDEX, _STEM_INDEX_ROOT, _STEM_INDEX_BUILT_AT
-    mtime = _wiki_mtime(directory)
-    if (
-        _STEM_INDEX_ROOT == directory.resolve()
-        and _STEM_INDEX
-        and _STEM_INDEX_BUILT_AT >= mtime
-    ):
-        return _STEM_INDEX
+def _stem_index_path(wiki_dir: Path) -> Path:
+    """Persist under workspace .okbay/ next to the wiki (wiki is usually <ws>/wiki)."""
+    # Prefer sibling .okbay under workspace root; fall back beside wiki_dir.
+    ws = wiki_dir.parent if wiki_dir.name == "wiki" else wiki_dir
+    return ws / ".okbay" / "stem-index.json"
+
+
+def invalidate_stem_index() -> None:
+    """Clear in-memory stem index (e.g. after workspace switch)."""
+    global _STEM_INDEX, _STEM_INDEX_ROOT, _STEM_INDEX_BUILT_AT, _STEM_WARM_GEN
+    with _STEM_INDEX_LOCK:
+        _STEM_INDEX = {}
+        _STEM_INDEX_ROOT = None
+        _STEM_INDEX_BUILT_AT = 0.0
+        _STEM_WARM_GEN += 1
+
+
+def _load_persisted_index(directory: Path, mtime: float) -> dict[str, Path] | None:
+    path = _stem_index_path(directory)
+    if not path.is_file():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        stored_mtime = float(raw.get("wiki_mtime") or 0)
+    except (TypeError, ValueError):
+        return None
+    # Tolerate tiny float noise; require matching root when present.
+    if abs(stored_mtime - mtime) > 1e-3:
+        return None
+    stored_root = raw.get("wiki_root")
+    try:
+        resolved = str(directory.resolve())
+    except OSError:
+        resolved = str(directory)
+    if stored_root and stored_root != resolved:
+        return None
+    stems = raw.get("stems") or {}
+    if not isinstance(stems, dict) or not stems:
+        return None
+    idx: dict[str, Path] = {}
+    for stem, rel in stems.items():
+        if not stem or not isinstance(rel, str):
+            continue
+        # Persist relative paths only; skip absolute / traversal.
+        if Path(rel).is_absolute() or ".." in Path(rel).parts:
+            continue
+        idx[str(stem)] = directory / rel
+    return idx if idx else None
+
+
+def _persist_index(directory: Path, idx: dict[str, Path], mtime: float) -> None:
+    path = _stem_index_path(directory)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            root_s = str(directory.resolve())
+        except OSError:
+            root_s = str(directory)
+        stems: dict[str, str] = {}
+        for stem, p in idx.items():
+            try:
+                stems[stem] = str(p.relative_to(directory))
+            except ValueError:
+                stems[stem] = str(p)
+        payload = {
+            "wiki_root": root_s,
+            "wiki_mtime": mtime,
+            "built_at": time.time(),
+            "count": len(stems),
+            "stems": stems,
+        }
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def _build_stem_index(directory: Path) -> dict[str, Path]:
     idx: dict[str, Path] = {}
     if directory.exists():
         for p in directory.rglob("*.md"):
             # Prefer first path for a stem; CE layout is wiki/<kind>/<stem>.md
             idx.setdefault(p.stem, p)
-    _STEM_INDEX = idx
-    try:
-        _STEM_INDEX_ROOT = directory.resolve()
-    except OSError:
-        _STEM_INDEX_ROOT = directory
-    _STEM_INDEX_BUILT_AT = mtime
     return idx
 
+
+def _stem_index(directory: Path) -> dict[str, Path]:
+    """Map file-stem → path. Built once per wiki root; avoids parsing 39k pages per modal open."""
+    global _STEM_INDEX, _STEM_INDEX_ROOT, _STEM_INDEX_BUILT_AT
+    mtime = _wiki_mtime(directory)
+    try:
+        resolved = directory.resolve()
+    except OSError:
+        resolved = directory
+    with _STEM_INDEX_LOCK:
+        if (
+            _STEM_INDEX_ROOT == resolved
+            and _STEM_INDEX
+            and _STEM_INDEX_BUILT_AT >= mtime
+        ):
+            return _STEM_INDEX
+        persisted = _load_persisted_index(directory, mtime)
+        if persisted is not None:
+            _STEM_INDEX = persisted
+            _STEM_INDEX_ROOT = resolved
+            _STEM_INDEX_BUILT_AT = mtime
+            return _STEM_INDEX
+        idx = _build_stem_index(directory)
+        _STEM_INDEX = idx
+        _STEM_INDEX_ROOT = resolved
+        _STEM_INDEX_BUILT_AT = mtime
+        _persist_index(directory, idx, mtime)
+        return idx
+
+
+def warm_stem_index(wiki_dir: Path | None = None) -> dict:
+    """Build (or load) the stem→path index. Safe to call from a daemon thread.
+
+    Returns a small status dict. Concurrent callers share one build via the lock;
+    workspace switches bump a generation so stale warmers exit early.
+    """
+    from . import paths
+    directory = wiki_dir or paths.wiki()
+    with _STEM_INDEX_LOCK:
+        gen = _STEM_WARM_GEN
+    started = time.perf_counter()
+    try:
+        if not directory.exists():
+            return {"ok": True, "count": 0, "wiki": str(directory), "skipped": "missing"}
+        idx = _stem_index(directory)
+        with _STEM_INDEX_LOCK:
+            if gen != _STEM_WARM_GEN:
+                return {"ok": True, "count": len(idx), "wiki": str(directory), "stale": True}
+        return {
+            "ok": True,
+            "count": len(idx),
+            "wiki": str(directory),
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
+        }
+    except Exception as exc:  # pragma: no cover — defensive for serve warm
+        return {"ok": False, "error": str(exc), "wiki": str(directory)}
+
+
+def warm_stem_index_background(wiki_dir: Path | None = None) -> None:
+    """Fire-and-forget daemon warm so /health can come up immediately."""
+    def _run() -> None:
+        warm_stem_index(wiki_dir)
+
+    t = threading.Thread(target=_run, name="okbay-warm-stem-index", daemon=True)
+    t.start()
 
 
 def get_page(stem: str, wiki_dir: Path | None = None) -> Page | None:

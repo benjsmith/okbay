@@ -378,8 +378,13 @@
       if (viewerButton) {
         viewerButton.classList.remove('hidden');
         viewerButton.hidden = false;
-        viewerButton.addEventListener('click', function () {
-          if (typeof self.onViewerToggle === 'function') self.onViewerToggle();
+        viewerButton.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (window.OkbayAtlasChrome && OkbayAtlasChrome.Views && typeof OkbayAtlasChrome.Views.togglePanel === 'function') {
+            OkbayAtlasChrome.Views.togglePanel();
+          } else if (typeof self.onViewerToggle === 'function') {
+            self.onViewerToggle();
+          }
         });
       }
 
@@ -452,11 +457,12 @@
       var btn = document.getElementById('viewer-mode');
       if (state) state.textContent = mode;
       if (btn) {
-        btn.title = mode === 'atlas' ? 'Switch to classic force graph (v)' : 'Switch to Knowledge Atlas (v)';
+        btn.title = 'Switch view (v)';
         btn.classList.remove('hidden');
         btn.hidden = false;
       }
       document.documentElement.dataset.viewer = mode;
+      document.documentElement.dataset.view = mode;
     },
 
     isTypesPanelOpen: function () {
@@ -1250,6 +1256,11 @@
           ev.preventDefault();
           return;
         }
+        if (OkbayAtlasChrome.Views && OkbayAtlasChrome.Views.isPanelOpen && OkbayAtlasChrome.Views.isPanelOpen()) {
+          OkbayAtlasChrome.Views.closePanel();
+          ev.preventDefault();
+          return;
+        }
         if (editable && Sidebar.searchEl && (ev.target === Sidebar.searchEl || Sidebar.searchEl.contains(ev.target))) {
           Sidebar.blurSearch(true);
           this.focusCanvas();
@@ -1345,7 +1356,11 @@
         return;
       }
       if (lower === 'v') {
-        if (typeof this.onViewerToggle === 'function') this.onViewerToggle();
+        if (OkbayAtlasChrome.Views && typeof OkbayAtlasChrome.Views.togglePanel === 'function') {
+          OkbayAtlasChrome.Views.togglePanel();
+        } else if (typeof this.onViewerToggle === 'function') {
+          this.onViewerToggle();
+        }
         ev.preventDefault();
         return;
       }

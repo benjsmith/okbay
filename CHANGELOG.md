@@ -2,9 +2,14 @@
 
 ## Unreleased
 
+- **Stem index warm**: `wiki.warm_stem_index()` / background warm at `serve` start; invalidate+rewarm on workspace switch; optional `.okbay/stem-index.json` persist for faster 9p restarts. Atlas modal cold-open no longer rebuilds the index on every click after warm.
+- **Frameless Atlas packaging**: `okbay-open-atlas.sh` uses `--class=OkbayAtlas`; Hyprland windowrule notes in `contrib/hypr-bindings.lua`; `docs/ATLAS-HOST.md`.
+- **Views shell**: bottom `view:` control is a views popup (Atlas / Viewer / Table / Library / Projects / Reviews + dynamic). Viewer sticky selection + back/forward; `GET|POST|DELETE /api/views`, sandboxed `/views/<id>`; MCP `okbay_list_views` / `okbay_publish_view` / `okbay_open_view`; `docs/VIEWS.md`, `skills/okbay-views`.
+
+
 - Wallpaper **v21**: EDSR×2 upscaled photographic wet-night plate (cached 3840×2160); tightened flush parallel bars (Δx≈3.35); **tiny crisp** silver end dots with outward nudge and **zero glow/halo** (no large grey orbs); droplet Switchbay reflections on photo floor.
 
-- Atlas **chrome parity** (Switchbay/CE): ingest **+** (`i`), workspace switcher (`o` + `/api/workspace/list|use|add`), edge mode auto/on/off (`e` + vendor `setEdges`), Atlas ↔ classic Graph toggle (`v` + slim D3), minimap toggle (`m`), in-chrome help (`?`). Vendored KnowledgeAtlas bump (setEdges) + `d3.min.js` / `classic-graph.js`.
+- Atlas **chrome parity** (Switchbay/CE): ingest **+** (`i`), workspace switcher (`o` + `/api/workspace/list|use|add`), edge mode auto/on/off (`e` + vendor `setEdges`), views popup (`v`; Atlas/Viewer/Table/…; classic via `?viewer=classic`), minimap toggle (`m`), in-chrome help (`?`). Vendored KnowledgeAtlas bump (setEdges) + `d3.min.js` / `classic-graph.js`.
 
 - Wallpaper **v20**: photographic wet-night plate full-frame (Lanczos upscale to 3440×1440 / 5120×2160; ultrawide height-fit + mirror side pads); SVG-faithful bar spacing (Δx=4) with ~4× supersample; smaller soft ball glow + transparent pad + crisp cores; v17-style droplet color reflections on the photo floor (no procedural sky/floor).
 - Atlas **Super+Shift+K** reopen: `okbay-open-atlas.sh` always focuses/launches Chromium (uwsm-app / Wayland); summon is best-effort only and no longer short-circuits when the plugin is already loaded. Soften Panel/Overlay `openAtlasWindow` (delegate to helper; no blanket `pkill`).

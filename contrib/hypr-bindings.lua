@@ -18,3 +18,24 @@ o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
 -- o.bind("SUPER + SHIFT + ALT + K", "OKBay Reviews", {
 --   launch = "omarchy-shell shell summon benjsmith.okbay '{\"surface\":\"panel\"}'",
 -- })
+
+--[[
+  Frameless / option-3 windowrules (Hyprland).
+
+  Chromium --app= + --class=OkbayAtlas (see okbay-open-atlas.sh). Merge the
+  following into ~/.config/hypr/windows.conf (or hyprland.conf windowrulev2
+  section) when Omarchy exposes them. Prefer special workspace if you want
+  Atlas off the tiling grid; fullscreen alone is enough for kiosk feel.
+
+  # Single-instance feel: float or fullscreen on the OkbayAtlas class
+  windowrulev2 = float, class:^(OkbayAtlas)$
+  windowrulev2 = fullscreen, class:^(OkbayAtlas)$
+  # Optional: pin to a dedicated special workspace (toggle with Super+S-style bind)
+  # windowrulev2 = workspace special:okbay, class:^(OkbayAtlas)$
+  # Optional: no blur/shadow chrome noise
+  # windowrulev2 = noblur, class:^(OkbayAtlas)$
+  # windowrulev2 = noshadow, class:^(OkbayAtlas)$
+
+  Launcher already focus-or-launches one window — do not also summon the
+  Quickshell surface on Super+Shift+K (double-window race).
+]]
