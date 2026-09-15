@@ -344,12 +344,17 @@
       if (chrome) chrome.classList.remove('hidden');
       this.paintHistoryButtons();
       if (!host) return;
+      // Source mode: render vault file body (sticky wiki page kept in hash/history).
+      if (source) {
+        this.renderSourceBody(host, source, pageId || this.stickyPage || '');
+        return;
+      }
       if (!pageId) {
         if (titleEl) titleEl.textContent = 'Viewer';
         host.innerHTML = '<div class="view-empty">Select a page from Atlas (double-click) or open from a list. Selection is sticky — empty clicks do not clear.</div>';
         return;
       }
-      if (titleEl) titleEl.textContent = source ? ('Source · ' + source) : pageId;
+      if (titleEl) titleEl.textContent = pageId;
       host.innerHTML = '<p class="modal-loading">Loading…</p>';
       var self = this;
       var url = this.api + '/api/atlas/page?stem=' + encodeURIComponent(pageId);
@@ -389,7 +394,6 @@
               self.openPage(a.getAttribute('data-page'));
             });
           });
-          if (source) self.renderSourceHint(host, source);
         })
         .catch(function (e) {
           host.innerHTML = '<p class="modal-empty">Failed: ' + escapeHtml(String(e)) + '</p>';
@@ -398,25 +402,64 @@
 
     openSource: function (sourcePath, fromPage) {
       // Switch Viewer to source rendering in the same view (sticky page retained).
+      var page = fromPage || this.stickyPage || '';
+      if (page) this.stickyPage = page;
+      this.pushHistory(page, sourcePath);
+      writeHash({ view: 'viewer', page: page, source: sourcePath });
       var host = document.getElementById('view-pane-body');
+      if (!host) return;
+      this.renderSourceBody(host, sourcePath, page);
+    },
+
+    renderSourceBody: function (host, sourcePath, fromPage) {
       var titleEl = document.getElementById('view-pane-title');
       if (titleEl) titleEl.textContent = 'Source · ' + sourcePath;
-      this.pushHistory(fromPage || this.stickyPage || '', sourcePath);
-      writeHash({ view: 'viewer', page: fromPage || this.stickyPage || '', source: sourcePath });
-      if (!host) return;
-      host.innerHTML =
-        '<div class="viewer-meta">source file</div>' +
-        '<pre class="viewer-md">' + escapeHtml(sourcePath) + '</pre>' +
-        '<p class="view-empty">Vault/source path selected. Use Reveal files from Atlas modal for Nautilus, or open the wiki page that cites it.</p>' +
-        '<p><button type="button" class="modal-action-btn" id="viewer-back-to-page">Back to page</button></p>';
+      host.innerHTML = '<p class="modal-loading">Loading source…</p>';
+      var self = this;
+      var url = this.api + '/api/atlas/source?path=' + encodeURIComponent(sourcePath);
+      if (fromPage) url += '&stem=' + encodeURIComponent(fromPage);
+      fetch(url)
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) {
+            var err = (res.j && res.j.error) || ('HTTP ' + res.status);
+            host.innerHTML =
+              '<div class="viewer-meta">source file</div>' +
+              '<pre class="viewer-md">' + escapeHtml(sourcePath) + '</pre>' +
+              '<p class="modal-empty">' + escapeHtml(err) + '</p>' +
+              '<p><button type="button" class="modal-action-btn" id="viewer-back-to-page">Back to page</button></p>';
+            self._bindBackToPage(fromPage);
+            return;
+          }
+          var doc = res.j;
+          if (titleEl) titleEl.textContent = 'Source · ' + (doc.title || sourcePath);
+          var body = doc.body_html || ('<pre class="viewer-md">' + escapeHtml(doc.markdown || '') + '</pre>');
+          var pathLabel = doc.relpath || doc.path || sourcePath;
+          host.innerHTML =
+            '<div class="viewer-meta">' + escapeHtml(doc.kind || 'source') +
+            ' · <code>' + escapeHtml(pathLabel) + '</code></div>' +
+            '<div class="viewer-body">' + body + '</div>' +
+            '<p><button type="button" class="modal-action-btn" id="viewer-back-to-page">Back to page</button></p>';
+          host.querySelectorAll('a.wikilink[data-page]').forEach(function (a) {
+            a.addEventListener('click', function (ev) {
+              ev.preventDefault();
+              self.openPage(a.getAttribute('data-page'));
+            });
+          });
+          self._bindBackToPage(fromPage);
+        })
+        .catch(function (e) {
+          host.innerHTML = '<p class="modal-empty">Failed: ' + escapeHtml(String(e)) + '</p>';
+        });
+    },
+
+    _bindBackToPage: function (fromPage) {
       var self = this;
       var btn = document.getElementById('viewer-back-to-page');
       if (btn) btn.addEventListener('click', function () {
         self.openPage(fromPage || self.stickyPage);
       });
     },
-
-    renderSourceHint: function () {},
 
     renderTable: function (host) {
       var chrome = document.getElementById('viewer-nav');

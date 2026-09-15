@@ -38,7 +38,7 @@ Stretch = Omarchy uplifts (Switchbay theme, bar summon, `okbay locate`, optional
 - [x] Sidebar expand/collapse-all (CE `sidebar-toggle-all` chevron)
 - [x] Fuse search → graph highlight via `engine.select` + `engine.focus` (typing + row select)
 - [x] Classic graph chooser gated: `MIN_ATLAS_PAGES≈360` — Biocure Atlas-only; `#viewer-mode` stays hidden
-- [ ] Confirm bar chip visually: left-click Atlas, right-click Reviews
+- [ ] Confirm bar chip visually: left-click Atlas, right-click Library (`#view=library`)
 - [ ] Later only: native QML Scene Graph if kiosk still feels non-Omarchy
 - [x] Interim: Chromium `--app=/atlas` opener (now CE KnowledgeAtlas host; SVG circle removed)
 - [x] Slice 1: vendor `knowledge-atlas.js` + mount against `/api/atlas/data` (see `CE-ATLAS-PARITY-AUDIT.md` §7)

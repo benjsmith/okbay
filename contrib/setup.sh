@@ -70,7 +70,25 @@ BINDEOF
     echo "==> $BINDINGS_LUA already references okbay-open-atlas.sh"
   fi
 fi
+# OkbayAtlas Hyprland windowrules (float/fullscreen); does not touch keybinds.
+if [ -f "$REPO_ROOT/contrib/okbay-atlas.conf" ]; then
+  if [ -x "$REPO_ROOT/contrib/install-okbay-atlas-rules.sh" ]; then
+    "$REPO_ROOT/contrib/install-okbay-atlas-rules.sh" || true
+  else
+    mkdir -p "$HOME/.config/hypr"
+    install -m 0644 "$REPO_ROOT/contrib/okbay-atlas.conf" "$HOME/.config/hypr/okbay-atlas.conf"
+    echo "==> installed ~/.config/hypr/okbay-atlas.conf — run: hyprctl reload"
+  fi
+fi
+# Also keep contrib scripts next to the plugin copy.
+if [ -f "$REPO_ROOT/contrib/okbay-atlas.conf" ]; then
+  install -m 0644 "$REPO_ROOT/contrib/okbay-atlas.conf"     "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-atlas.conf"
+fi
+if [ -f "$REPO_ROOT/contrib/install-okbay-atlas-rules.sh" ]; then
+  install -m 0755 "$REPO_ROOT/contrib/install-okbay-atlas-rules.sh"     "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/install-okbay-atlas-rules.sh"
+fi
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now okbayd.service 2>/dev/null || echo "(systemd user unit not enabled)"
 echo "Okbay setup complete. Atlas: http://127.0.0.1:8766/atlas"
 echo "Hypr: Super+Shift+K → OKBay Atlas (helper sets OMARCHY_PATH). Super+Shift+O is Obsidian by default."
+echo "Hypr windowrules: ~/.config/hypr/okbay-atlas.conf — after install: hyprctl reload"

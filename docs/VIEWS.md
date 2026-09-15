@@ -31,7 +31,9 @@ Legacy `#page=<stem>` opens Viewer for that page.
 - Double-click graph node or list row → Viewer (not cleared by empty canvas clicks).
 - Selecting another doc replaces the sticky selection.
 - Source chips on a wiki page switch Viewer to source mode in-place.
-- ← / → in the Viewer chrome walk a history stack.
+- Source mode loads `GET /api/atlas/source?path=` (vault-sandboxed) and renders
+  `body_html` like wiki pages (`markdown_to_html` for `.md`).
+- ← / → in the Viewer chrome walk a history stack (wiki ↔ source sticky).
 
 ## Stem index warm
 

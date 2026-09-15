@@ -13,7 +13,13 @@
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 export PATH="${HOME}/.local/bin:/usr/bin:${PATH}"
 
-ATLAS_URL="${OKBAY_ATLAS_URL:-http://127.0.0.1:8766/atlas}"
+# Optional first arg overrides URL (also OKBAY_ATLAS_URL). Used by bar Library click.
+if [[ "${1:-}" == http://* || "${1:-}" == https://* ]]; then
+  ATLAS_URL="$1"
+  shift
+else
+  ATLAS_URL="${OKBAY_ATLAS_URL:-http://127.0.0.1:8766/atlas}"
+fi
 ATLAS_MATCH='chromium.*(8766/atlas|OkbayAtlas|--class=OkbayAtlas)'
 ATLAS_CLASS="${OKBAY_ATLAS_CLASS:-OkbayAtlas}"
 
@@ -126,6 +132,20 @@ if [[ "${OKBAY_DO_SUMMON:-0}" == "1" ]] && command -v omarchy-shell >/dev/null 2
     fi
     sleep 0.12
   done
+fi
+
+# Hash routes (e.g. #view=library) need a fresh --app= URL; focus alone keeps the old hash.
+if [[ "${ATLAS_URL}" == *#* ]]; then
+  if [[ "$(count_atlas_chromium)" -gt 0 ]]; then
+    pkill -f "${ATLAS_MATCH}" 2>/dev/null || true
+    sleep 0.2
+  fi
+  launch_atlas_chromium
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    sleep 0.15
+    focus_atlas_window && exit 0
+  done
+  exit 0
 fi
 
 ensure_atlas_chromium

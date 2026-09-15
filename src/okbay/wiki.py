@@ -487,3 +487,131 @@ def page_payload(stem: str, wiki_dir: Path | None = None) -> dict | None:
         "markdown": page.body,
         "body_html": markdown_to_html(page.body),
     }
+
+
+# ── Vault source body for Viewer source mode ─────────────────────────────────
+
+_SOURCE_MAX_BYTES = 2 * 1024 * 1024  # 2 MiB
+
+
+def safe_vault_file(rel_or_path: str, ws: Path | None = None) -> Path | None:
+    """Resolve ``rel_or_path`` under workspace ``vault/``; reject traversal.
+
+    Accepts vault-relative names (``notes.md``, ``subdir/a.txt``) or absolute
+    paths that resolve inside the vault. Returns a file Path or None.
+    """
+    from . import paths as _paths
+
+    raw = (rel_or_path or "").strip()
+    if not raw:
+        return None
+    # Reject obvious traversal tokens before join.
+    if "\x00" in raw:
+        return None
+    parts = Path(raw).parts
+    if ".." in parts:
+        return None
+
+    root = ws or _paths.workspace()
+    vault = _paths.vault(root).resolve()
+    if not vault.is_dir():
+        return None
+
+    candidate = Path(raw).expanduser()
+    if candidate.is_absolute():
+        target = candidate.resolve()
+    else:
+        # Strip a leading "vault/" so wiki chips that include it still work.
+        rel = raw
+        if rel.startswith("vault/") or rel.startswith("vault\\"):
+            rel = rel[6:].lstrip("/\\")
+        if not rel or ".." in Path(rel).parts:
+            return None
+        target = (vault / rel).resolve()
+
+    try:
+        target.relative_to(vault)
+    except ValueError:
+        return None
+    if not target.is_file():
+        return None
+    return target
+
+
+def source_payload(
+    *,
+    path: str = "",
+    stem: str = "",
+    source: str = "",
+    ws: Path | None = None,
+) -> dict | None:
+    """Load a vault source file for the Atlas Viewer.
+
+    Query shapes:
+      path=vault-relative-or-absolute-under-vault
+      source=… (same as path)
+      stem=…&source=… (source preferred; stem is metadata only)
+
+    Returns None if missing; raises ValueError for sandbox / size violations
+    that callers should map to 400.
+    """
+    from . import paths as _paths
+
+    key = (path or source or "").strip()
+    if not key:
+        raise ValueError("path or source required")
+    if ".." in Path(key).parts or "\x00" in key:
+        raise ValueError("path traversal rejected")
+
+    hit = safe_vault_file(key, ws=ws)
+    if hit is None:
+        # If stem+source, try matching against page frontmatter sources.
+        if stem and source:
+            page = get_page(stem, wiki_dir=_paths.wiki(ws) if ws else None)
+            if page is not None:
+                for src in page.sources or []:
+                    if str(src) == source or Path(str(src)).name == Path(source).name:
+                        hit = safe_vault_file(str(src), ws=ws)
+                        if hit is not None:
+                            break
+        if hit is None:
+            return None
+
+    try:
+        size = hit.stat().st_size
+    except OSError as e:
+        raise ValueError(f"unreadable: {e}") from e
+    if size > _SOURCE_MAX_BYTES:
+        raise ValueError(f"source too large ({size} bytes; max {_SOURCE_MAX_BYTES})")
+
+    try:
+        text = hit.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        raise ValueError(f"unreadable: {e}") from e
+
+    suffix = hit.suffix.lower()
+    title = hit.stem.replace("-", " ").replace("_", " ").title()
+    if suffix in (".md", ".markdown", ".mdx"):
+        body_html = markdown_to_html(text)
+        markdown = text
+    else:
+        # Plain / other text: escape into a pre block (still HTML for Viewer).
+        body_html = f'<pre class="viewer-md">{_html_escape(text)}</pre>'
+        markdown = text
+
+    rel_display = str(hit)
+    try:
+        rel_display = str(hit.relative_to(_paths.vault(ws or _paths.workspace()).resolve()))
+    except ValueError:
+        pass
+
+    return {
+        "title": title,
+        "path": str(hit),
+        "relpath": rel_display,
+        "body_html": body_html,
+        "markdown": markdown,
+        "kind": "source",
+        "stem": stem or "",
+        "source": key,
+    }
