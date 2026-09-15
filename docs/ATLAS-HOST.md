@@ -20,14 +20,16 @@ Override URL/class with `OKBAY_ATLAS_URL` / `OKBAY_ATLAS_CLASS`.
 
 ## Hyprland windowrules
 
-See the comment block at the bottom of `contrib/hypr-bindings.lua`. Typical:
+Guest-ready file: `contrib/okbay-atlas.conf`. `contrib/setup.sh` (or
+`contrib/install-okbay-atlas-rules.sh`) installs it under `~/.config/hypr/` and
+sources it from `windows.conf` / `hyprland.conf`, then runs **`hyprctl reload`**.
 
 ```
 windowrulev2 = float, class:^(OkbayAtlas)$
 windowrulev2 = fullscreen, class:^(OkbayAtlas)$
-# optional:
-# windowrulev2 = workspace special:okbay, class:^(OkbayAtlas)$
 ```
+
+After a manual copy: `hyprctl reload`. Keybinds are untouched.
 
 ## Serve + views
 
@@ -46,3 +48,13 @@ curl -s http://127.0.0.1:8766/health
 # Super+Shift+K → one fullscreen Chromium; repeat → focus, not second window
 # Click a graph node → modal <<1s after warm (check okbayd log / stem-index.json)
 ```
+
+## Okstratr / Herdr bar (paired plugin)
+
+Okstratr ships its own bar chip + `contrib/okstratr-menu.jsonc`:
+
+- **Left-click** → summon okstratr panel (`Super+Shift+O`)
+- **Right-click** → no-op (reserved)
+
+If the okstratr checkout is absent on a guest, install from
+[benjsmith/okstratr](https://github.com/benjsmith/okstratr) `contrib/setup.sh`.

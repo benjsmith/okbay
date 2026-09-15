@@ -1,4 +1,6 @@
-// Okbay bar widget. Left click: Atlas overlay. Right click: Reviews panel.
+// Okbay bar widget.
+// Left-click: open Atlas (okbay-open-atlas.sh / frameless Chromium).
+// Right-click: open Library view (Atlas host #view=library via OKBAY_ATLAS_URL).
 // SETUP gate when the daemon has not been installed.
 // Uses the Quattro BarWidget host type (same contract as khephri.sia).
 
@@ -24,6 +26,8 @@ BarWidget {
   }
   readonly property string chipText: Model.label(status, stale)
   readonly property bool setupMode: Model.needsSetup(status)
+  readonly property string apiUrl: (status && status.api_url) ? status.api_url : "http://127.0.0.1:8766"
+  readonly property string atlasUrl: (status && status.atlas_url) ? status.atlas_url : (apiUrl + "/atlas")
 
   FileView {
     id: statusFile
@@ -71,6 +75,34 @@ BarWidget {
       Quickshell.execDetached(["omarchy-shell", "shell", "summon", "benjsmith.okbay", body])
   }
 
+  function runAtlasLauncher(urlOverride) {
+    // Prefer contrib/okbay-open-atlas.sh (focus-or-launch Chromium --class=OkbayAtlas).
+    // OKBAY_ATLAS_URL overrides the default /atlas (e.g. #view=library).
+    var url = urlOverride || root.atlasUrl
+    Quickshell.execDetached([
+      "sh", "-lc",
+      "export OKBAY_SKIP_SUMMON=1 OKBAY_ATLAS_URL='" + url + "'; " +
+      "for s in \"$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh\" " +
+      "\"$HOME/src/okbay/contrib/okbay-open-atlas.sh\"; do " +
+      "[ -x \"$s\" ] && exec \"$s\"; done; " +
+      "if command -v uwsm-app >/dev/null 2>&1; then " +
+      "nohup uwsm-app -- chromium --ozone-platform=wayland --class=OkbayAtlas --app='" + url + "' --start-fullscreen >/tmp/okbay-atlas-chrome.log 2>&1 & " +
+      "else " +
+      "nohup chromium --ozone-platform=wayland --class=OkbayAtlas --app='" + url + "' --start-fullscreen >/tmp/okbay-atlas-chrome.log 2>&1 & " +
+      "fi"
+    ])
+  }
+
+  function openAtlas() {
+    root.runAtlasLauncher(root.atlasUrl)
+  }
+
+  function openLibrary() {
+    // Library view on the Atlas host (views shell hash routing).
+    var base = root.atlasUrl.split("#")[0]
+    root.runAtlasLauncher(base + "#view=library")
+  }
+
   function runSetup() {
     Quickshell.execDetached(["sh", "-lc", "command -v okbay >/dev/null && okbay setup || (command -v foot && foot -e bash -lc 'echo Okbay is not on PATH yet. Clone github.com/benjsmith/okbay and run contrib/setup.sh; read')"])
   }
@@ -86,9 +118,9 @@ BarWidget {
         return
       }
       if (mouse.button === Qt.RightButton)
-        root.summonOkbay("{\"surface\":\"panel\"}")
+        root.openLibrary()
       else
-        root.summonOkbay("{\"surface\":\"atlas\"}")
+        root.openAtlas()
     }
   }
 

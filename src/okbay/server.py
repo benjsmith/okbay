@@ -111,6 +111,21 @@ class Handler(BaseHTTPRequestHandler):
             if payload is None:
                 return self._json({"error": "not found", "stem": stem}, 404)
             return self._json(payload)
+        # Viewer source mode: vault file body (sandboxed under workspace vault/).
+        if path in ("/api/atlas/source", "/atlas/source"):
+            spath = (q.get("path") or [""])[0]
+            ssrc = (q.get("source") or [""])[0]
+            stem = (q.get("stem") or [""])[0]
+            try:
+                payload = wiki.source_payload(path=spath, source=ssrc, stem=stem)
+            except ValueError as e:
+                return self._json({"error": str(e), "kind": "source"}, 400)
+            if payload is None:
+                return self._json(
+                    {"error": "not found", "path": spath or ssrc, "stem": stem, "kind": "source"},
+                    404,
+                )
+            return self._json(payload)
         if path.startswith("/api/wiki/") or path.startswith("/wiki/"):
             stem = unquote(path.rsplit("/", 1)[-1]).strip()
             payload = wiki.page_payload(stem) if stem else None

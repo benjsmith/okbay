@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Viewer source body**: `GET /api/atlas/source` (vault path sandbox) + views-shell renders source HTML; wiki↔source history preserved.
+- **Bar / menu**: left-click Atlas launcher; right-click Library `#view=library`; menu Library entry.
+- **Hypr OkbayAtlas**: `contrib/okbay-atlas.conf` + `install-okbay-atlas-rules.sh` / setup.sh → `hyprctl reload`.
 - **Stem index warm**: `wiki.warm_stem_index()` / background warm at `serve` start; invalidate+rewarm on workspace switch; optional `.okbay/stem-index.json` persist for faster 9p restarts. Atlas modal cold-open no longer rebuilds the index on every click after warm.
 - **Frameless Atlas packaging**: `okbay-open-atlas.sh` uses `--class=OkbayAtlas`; Hyprland windowrule notes in `contrib/hypr-bindings.lua`; `docs/ATLAS-HOST.md`.
 - **Views shell**: bottom `view:` control is a views popup (Atlas / Viewer / Table / Library / Projects / Reviews + dynamic). Viewer sticky selection + back/forward; `GET|POST|DELETE /api/views`, sandboxed `/views/<id>`; MCP `okbay_list_views` / `okbay_publish_view` / `okbay_open_view`; `docs/VIEWS.md`, `skills/okbay-views`.

@@ -1,6 +1,7 @@
 {
   "Okbay": [
-    { "label": "Atlas",   "action": "omarchy-shell shell summon benjsmith.okbay '{\"surface\":\"atlas\"}'" },
+    { "label": "Atlas",   "action": "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh" },
+    { "label": "Library", "action": "env OKBAY_ATLAS_URL=http://127.0.0.1:8766/atlas#view=library ~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh" },
     { "label": "Reviews", "action": "omarchy-shell shell summon benjsmith.okbay '{\"surface\":\"panel\"}'" },
     { "label": "Ask",     "action": "okbay ask --prompt" },
     { "label": "Curate",  "action": "okbay desk start curate" },
