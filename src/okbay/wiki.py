@@ -109,16 +109,74 @@ def write_page(wiki_dir: Path | None = None, stem: str = "", title: str = "", bo
         page = Page(stem=stem, path=path, title=title, kind=kind, body=body, front=extra or {}, links=[], sources=sources or [])
     return page
 
+_STEM_INDEX: dict[str, Path] = {}
+_STEM_INDEX_ROOT: Path | None = None
+_STEM_INDEX_BUILT_AT: float = 0.0
+
+
+def _wiki_mtime(directory: Path) -> float:
+    try:
+        return directory.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _stem_index(directory: Path) -> dict[str, Path]:
+    """Map file-stem → path. Built once per wiki root; avoids parsing 39k pages per modal open."""
+    global _STEM_INDEX, _STEM_INDEX_ROOT, _STEM_INDEX_BUILT_AT
+    mtime = _wiki_mtime(directory)
+    if (
+        _STEM_INDEX_ROOT == directory.resolve()
+        and _STEM_INDEX
+        and _STEM_INDEX_BUILT_AT >= mtime
+    ):
+        return _STEM_INDEX
+    idx: dict[str, Path] = {}
+    if directory.exists():
+        for p in directory.rglob("*.md"):
+            # Prefer first path for a stem; CE layout is wiki/<kind>/<stem>.md
+            idx.setdefault(p.stem, p)
+    _STEM_INDEX = idx
+    try:
+        _STEM_INDEX_ROOT = directory.resolve()
+    except OSError:
+        _STEM_INDEX_ROOT = directory
+    _STEM_INDEX_BUILT_AT = mtime
+    return idx
+
+
+
 def get_page(stem: str, wiki_dir: Path | None = None) -> Page | None:
     from . import paths
     directory = wiki_dir or paths.wiki()
-    if directory.exists():
-        direct = directory / f"{slugify(stem)}.md"
-        if direct.exists():
-            return parse_page(direct)
-        for page in list_pages(directory):
-            if page.stem == stem or page.stem == slugify(stem) or page.title.lower() == stem.lower():
-                return page
+    if not stem:
+        return None
+    slug = slugify(stem)
+
+    if not directory.exists():
+        return None
+
+    # 1) Flat wiki/<stem>.md
+    direct = directory / f"{slug}.md"
+    if direct.is_file():
+        return parse_page(direct)
+
+    # 2) Nested CE layout via stem index (one rglob to build, then O(1); no parse-all).
+    idx = _stem_index(directory)
+    hit = idx.get(slug) or idx.get(stem)
+    if hit is not None and hit.is_file():
+        return parse_page(hit)
+
+    # 3) Last resort: single-name rglob (still no full parse).
+    matches = list(directory.rglob(f"{slug}.md"))
+    for p in matches:
+        page = parse_page(p)
+        if page is None:
+            continue
+        if page.stem == stem or page.stem == slug or page.title.lower() == stem.lower():
+            return page
+    if matches:
+        return parse_page(matches[0])
     return None
 
 Page.meta = property(lambda self: self.front)
