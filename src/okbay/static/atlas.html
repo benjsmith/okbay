@@ -251,6 +251,93 @@
     color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
   }
 
+  /* Views shell (workspace-scoped right-pane) */
+  #app[data-view]:not([data-view="atlas"]) #sidebar,
+  body[data-view]:not([data-view="atlas"]) #sidebar { display: none; }
+  #view-pane {
+    flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+    background: var(--bg); position: relative; z-index: 2;
+  }
+  #graph-pane.view-host {
+    display: flex; flex-direction: column;
+  }
+  #graph-pane.view-host #view-pane {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column;
+  }
+  #graph-controls .views-panel { left: 0; }
+
+  #view-pane.hidden, #graph-pane.hidden { display: none !important; }
+  #view-pane-chrome {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    background: var(--bg-soft);
+  }
+  #view-pane-title { font-weight: 600; font-size: 14px; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #viewer-nav { display: flex; gap: 6px; }
+  #viewer-nav.hidden { display: none; }
+  #viewer-nav button {
+    border: 1px solid var(--line); background: var(--bg-elev); color: var(--text);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  #viewer-nav button:disabled { opacity: 0.4; cursor: default; }
+  #view-pane-body { flex: 1; overflow: auto; padding: 16px 18px; min-height: 0; }
+  .view-empty { color: var(--text-muted); padding: 24px 8px; }
+  .views-panel {
+    position: absolute; bottom: 44px; left: 0; z-index: 22;
+    width: 220px; padding: 10px; border-radius: 8px;
+    background: var(--bg-elev); border: 1px solid var(--line);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+    max-height: min(50vh, 360px); overflow: auto;
+  }
+  .views-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; border: 0; background: transparent; color: var(--text);
+    text-align: left; padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .views-row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .views-row[data-active="true"] { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .views-badge {
+    font-size: 10px; font-weight: 700; color: var(--bg); background: var(--accent);
+    border-radius: 999px; padding: 1px 6px;
+  }
+  .views-table-wrap { overflow: auto; max-height: calc(100vh - 120px); }
+  .views-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .views-table th, .views-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .views-table tbody tr { cursor: pointer; }
+  .views-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .views-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin-bottom: 10px; color: var(--text-muted); font-size: 12px; }
+  .views-list { display: flex; flex-direction: column; gap: 2px; }
+  .views-list-row {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    border: 0; background: transparent; color: var(--text); text-align: left;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .views-list-row.static { cursor: default; flex-wrap: wrap; }
+  .views-list-row:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .views-list-meta { margin-left: auto; color: var(--text-faint); font-size: 11px; }
+  .viewer-meta { color: var(--text-muted); font-size: 11px; margin-bottom: 12px; }
+  .viewer-sources { margin-bottom: 14px; }
+  .views-section-head { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+  .viewer-source-btn {
+    display: inline-block; margin: 0 6px 6px 0; border: 1px solid var(--line);
+    background: var(--bg-elev); color: var(--text); border-radius: 6px; padding: 4px 8px;
+    cursor: pointer; font: inherit; font-size: 11px;
+  }
+  .viewer-source-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .viewer-body { line-height: 1.55; }
+  .viewer-md { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; }
+  .views-frame { width: 100%; height: calc(100vh - 100px); border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .reviews-actions { display: flex; gap: 6px; width: 100%; margin-top: 4px; }
+  .reviews-actions button {
+    border: 1px solid var(--line); background: var(--bg); color: var(--text);
+    border-radius: 6px; padding: 3px 8px; cursor: pointer; font: inherit; font-size: 11px;
+  }
+
+
   /* Chrome parity: ingest / workspace / edges / help */
   .brand-actions { display: flex; gap: 6px; align-items: center; }
   .brand-actions .icon-btn { width: 28px; height: 28px; }
@@ -357,9 +444,13 @@
     <!-- Controls AFTER #graph (CE DOM order) so they stack above the canvas.
          Classic/Atlas chooser stays hidden when corpus > MIN_ATLAS_PAGES (360). -->
     <div class="graph-controls" id="graph-controls" aria-label="Atlas label controls">
-      <button id="viewer-mode" class="ctrl-btn" type="button" title="Switch graph viewer (v)" aria-label="Switch graph viewer">
+      <button id="viewer-mode" class="ctrl-btn" type="button" title="Switch view (v)" aria-label="Switch view">
         <span class="ctrl-label">view:</span><span id="viewer-mode-state">atlas</span>
       </button>
+      <div id="views-panel" class="views-panel hidden" role="dialog" aria-label="Views">
+        <div class="label-types-head">Views</div>
+        <div id="views-panel-list"></div>
+      </div>
       <button id="label-mode" class="ctrl-btn" type="button" title="Label visibility (l)" aria-label="Label visibility">
         <span class="ctrl-label">labels:</span><span id="label-mode-state">auto</span>
       </button>
@@ -386,6 +477,17 @@
         <button id="label-types-reset" class="settings-reset" type="button">Reset</button>
       </div>
     </div>
+  </div>
+  <div id="view-pane" class="hidden" hidden>
+    <div id="view-pane-chrome">
+      <div id="viewer-nav" class="hidden">
+        <button type="button" id="viewer-back" title="Back" aria-label="Back">←</button>
+        <button type="button" id="viewer-forward" title="Forward" aria-label="Forward">→</button>
+      </div>
+      <div id="view-pane-title">Viewer</div>
+      <button type="button" id="reviews-accept-all" class="modal-action-btn hidden" title="Accept all pending reviews">Accept All</button>
+    </div>
+    <div id="view-pane-body"></div>
   </div>
 </div>
 <div id="modal-backdrop" class="hidden" aria-hidden="true"></div>
@@ -416,7 +518,7 @@
       <tr><td class="k">/</td><td>Focus search</td></tr>
       <tr><td class="k">i</td><td>Ingest file/folder (+)</td></tr>
       <tr><td class="k">o</td><td>Workspace switcher</td></tr>
-      <tr><td class="k">v</td><td>Toggle Atlas ↔ Graph (classic)</td></tr>
+      <tr><td class="k">v</td><td>Views popup (Atlas / Viewer / Table / …)</td></tr>
       <tr><td class="k">e</td><td>Cycle edge rendering auto → on → off</td></tr>
       <tr><td class="k">l</td><td>Cycle label mode</td></tr>
       <tr><td class="k">t</td><td>Types popup</td></tr>
@@ -440,6 +542,7 @@
 <script src="/static/atlas-keys-helpers.js"></script>
 <script src="/static/classic-graph.js"></script>
 <script src="/static/atlas-chrome.js"></script>
+<script src="/static/views-shell.js"></script>
 <script>
 (function () {
   'use strict';
@@ -488,32 +591,21 @@
     }
   }
 
-  /* Viewer preference: ?viewer=atlas|classic > localStorage > atlas default.
-     Toggle reloads like CE so Atlas canvas and classic D3 lifecycles stay independent. */
+  /* Graph engine: Atlas canvas by default. Classic remains via ?viewer=classic only.
+     The bottom view: control is a Views popup (Atlas/Viewer/Table/…), not classic toggle. */
   var VIEWER_KEY = (window.OkbayAtlasChrome && OkbayAtlasChrome.VIEWER_KEY) || 'okbay.viewer';
 
   function resolveViewer() {
     try {
       var q = new URLSearchParams(location.search).get('viewer');
-      if (q === 'atlas' || q === 'classic') return q;
+      if (q === 'classic') return 'classic';
     } catch (e) {}
-    try {
-      var s = localStorage.getItem(VIEWER_KEY);
-      if (s === 'atlas' || s === 'classic') return s;
-    } catch (e2) {}
     return 'atlas';
   }
 
-  function toggleViewer() {
-    var cur = resolveViewer();
-    var next = cur === 'atlas' ? 'classic' : 'atlas';
-    try { localStorage.setItem(VIEWER_KEY, next); } catch (e) {}
-    try {
-      var url = new URL(location.href);
-      url.searchParams.delete('viewer');
-      location.assign(url.toString());
-    } catch (e2) {
-      location.reload();
+  function openViewsPanel() {
+    if (window.OkbayAtlasChrome && OkbayAtlasChrome.Views) {
+      OkbayAtlasChrome.Views.togglePanel();
     }
   }
 
@@ -560,30 +652,44 @@
   function openPage(id, opts) {
     opts = opts || {};
     if (!id) return;
-    if (!opts.skipHash) {
-      var next = '#page=' + encodeURIComponent(id);
-      if (location.hash !== next) location.hash = next;
-      else applyHash();
-      return;
-    }
     OkbayAtlasChrome.Sidebar.setActive(id);
     focusInAtlas(id);
     toastFocus(id);
+    // Views shell: open in Viewer (sticky). Modal remains for Shift+Enter quick peek.
+    if (opts.modal) {
+      OkbayAtlasChrome.Modal.open(id);
+      return;
+    }
+    if (window.OkbayAtlasChrome && OkbayAtlasChrome.Views) {
+      OkbayAtlasChrome.Views.openPage(id, opts);
+      return;
+    }
     OkbayAtlasChrome.Modal.open(id);
   }
 
   function applyHash() {
-    var m = location.hash.match(/^#page=([^&]+)$/);
-    if (!m) return;
-    var pageId = decodeURIComponent(m[1]);
-    OkbayAtlasChrome.Sidebar.setActive(pageId);
-    focusInAtlas(pageId);
-    toastFocus(pageId);
-    OkbayAtlasChrome.Modal.open(pageId);
+    if (window.OkbayAtlasChrome && OkbayAtlasChrome.Views) {
+      OkbayAtlasChrome.Views.applyHash();
+      var h = location.hash || '';
+      var m = h.match(/(?:^#|&)page=([^&]+)/);
+      if (m) {
+        var pageId = decodeURIComponent(m[1]);
+        OkbayAtlasChrome.Sidebar.setActive(pageId);
+        focusInAtlas(pageId);
+      }
+      return;
+    }
+    var m2 = location.hash.match(/^#page=([^&]+)$/);
+    if (!m2) return;
+    var pageId2 = decodeURIComponent(m2[1]);
+    OkbayAtlasChrome.Sidebar.setActive(pageId2);
+    focusInAtlas(pageId2);
+    toastFocus(pageId2);
+    OkbayAtlasChrome.Modal.open(pageId2);
   }
 
   function onOpenItem(id) {
-    // dbl-click / item-open-requested from KnowledgeAtlas
+    // dbl-click / item-open-requested from KnowledgeAtlas → Viewer
     openPage(id);
   }
 
@@ -645,6 +751,18 @@
       onSwitched: function () { location.reload(); }
     });
     OkbayAtlasChrome.Help.init();
+    if (window.OkbayViewsShell) {
+      OkbayAtlasChrome.Views = window.OkbayViewsShell;
+    }
+    if (OkbayAtlasChrome.Views) {
+      OkbayAtlasChrome.Views.init(ceData, {
+        api: api,
+        onViewChange: function (id) {
+          document.title = 'OKBay · ' + id;
+          if (id === 'atlas') setStatus('OKBay Atlas · ' + corpusSize + ' nodes');
+        }
+      });
+    }
 
     graphEl.innerHTML = '';
     var classicHandle = null;
@@ -724,7 +842,7 @@
     if (pane && controlsEl) pane.appendChild(controlsEl);
 
     OkbayAtlasChrome.Controls.init(handle, {
-      onViewerToggle: toggleViewer,
+      onViewerToggle: openViewsPanel,
       onToast: toastMsg
     });
     OkbayAtlasChrome.Controls.setViewerState(viewerMode);
@@ -740,7 +858,7 @@
       graphEl: graphEl,
       onToast: toastFocus,
       onOpenItem: onOpenItem,
-      onViewerToggle: toggleViewer
+      onViewerToggle: openViewsPanel
     });
     if (controlsEl) {
       controlsEl.style.display = 'flex';
@@ -749,8 +867,13 @@
       controlsEl.setAttribute('data-mounted', 'after-viewer');
     }
 
-    window.addEventListener('hashchange', applyHash);
-    if (location.hash.indexOf('#page=') === 0) applyHash();
+    // Views.applyHash handles #view=…; legacy #page= still supported.
+    if (!OkbayAtlasChrome.Views) {
+      window.addEventListener('hashchange', applyHash);
+      if (location.hash.indexOf('#page=') === 0) applyHash();
+    } else if (location.hash) {
+      applyHash();
+    }
 
     setStatus('OKBay ' + (viewerMode === 'classic' ? 'Graph' : 'Atlas') + ' · ' + corpusSize + ' nodes');
     setTimeout(function () {

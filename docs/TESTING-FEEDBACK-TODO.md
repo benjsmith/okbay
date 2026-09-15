@@ -30,7 +30,7 @@ Stretch = Omarchy uplifts (Switchbay theme, bar summon, `okbay locate`, optional
 - [x] Okbayd data bridge: `GET /api/atlas/data` → CEData (`atlas_ce` Py+Rust); see `CE-ATLAS-PARITY-AUDIT.md` §7 Slice 0
 - [x] Parity A — canvas mount: KnowledgeAtlas hybrid + **CE Policy A** (`maxAggregates:0`, `coreCapacity=corpusSize`); vendor JS on `/atlas` (2026-09-11 aggregate/minimap fix; Biocure visual confirm via screenshot)
 - [x] Parity B — chrome: Fuse search, slim wiki/source modal, in-atlas focus (`atlas-chrome.js`; see audit §7 Slice 2)
-- [ ] Option 3 packaging: frameless Chromium / special workspace; bar left-click opens Atlas
+- [x] Option 3 packaging: frameless Chromium `--class=OkbayAtlas` + Hypr notes (`docs/ATLAS-HOST.md`); bar left-click still TBD
 - [x] File highlight via `okbay locate` — modal **Reveal files**, resolve-only on open (`reveal=0`), toast + sources/files list
 - [x] Omarchy-native file browser reveal — prefer Nautilus (`uwsm-app` → `nautilus --select` / `--new-window`), fall back to `xdg-open` (see note below)
 - [x] Label option buttons + type popup (CE `initAtlasControls` slim port in atlas chrome)

@@ -6,11 +6,16 @@
 # Super+Shift+K must open exactly ONE Atlas Chromium. Do not also
 # omarchy-shell summon here: Panel.openAtlasWindow races this launcher
 # and produces a second window. Menu/extension paths may still summon.
+#
+# Frameless / option-3 packaging:
+#   Chromium --app= strips browser chrome; --class=OkbayAtlas lets Hyprland
+#   windowrules float/fullscreen/special-workspace (see hypr-bindings.lua).
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 export PATH="${HOME}/.local/bin:/usr/bin:${PATH}"
 
 ATLAS_URL="${OKBAY_ATLAS_URL:-http://127.0.0.1:8766/atlas}"
-ATLAS_MATCH='chromium.*8766/atlas'
+ATLAS_MATCH='chromium.*(8766/atlas|OkbayAtlas|--class=OkbayAtlas)'
+ATLAS_CLASS="${OKBAY_ATLAS_CLASS:-OkbayAtlas}"
 
 # Import Wayland/Display from systemd user session when launched outside the desktop.
 if [[ -z "${WAYLAND_DISPLAY:-}" || -z "${XDG_RUNTIME_DIR:-}" ]]; then
@@ -28,8 +33,9 @@ fi
 focus_atlas_window() {
   command -v hyprctl >/dev/null 2>&1 || return 1
   local addr
-  addr="$(hyprctl clients -j 2>/dev/null | python3 -c '
-import json, sys
+  addr="$(hyprctl clients -j 2>/dev/null | ATLAS_CLASS="${ATLAS_CLASS}" python3 -c '
+import json, os, sys
+want = (os.environ.get("ATLAS_CLASS") or "OkbayAtlas").lower()
 try:
     clients = json.load(sys.stdin)
 except Exception:
@@ -44,6 +50,12 @@ for c in clients:
         classes = str(cls or "")
     initial_class = str(c.get("initialClass") or "")
     blob = (classes + " " + title + " " + initial + " " + initial_class).lower()
+    if want and want in classes.lower():
+        print(c.get("address") or "")
+        sys.exit(0)
+    if want and want in initial_class.lower():
+        print(c.get("address") or "")
+        sys.exit(0)
     if "8766/atlas" in title.lower() or "8766/atlas" in initial.lower():
         print(c.get("address") or "")
         sys.exit(0)
@@ -61,11 +73,21 @@ count_atlas_chromium() {
 }
 
 launch_atlas_chromium() {
+  # --app= : frameless Chromium app window (no tab strip / omnibox).
+  # --class= : Hyprland windowrule target (OkbayAtlas).
+  # --name= : X11/Wayland app_id hint on some Chromium builds.
+  local flags=(
+    --ozone-platform=wayland
+    --class="${ATLAS_CLASS}"
+    --name="${ATLAS_CLASS}"
+    --app="${ATLAS_URL}"
+    --start-fullscreen
+  )
   if command -v uwsm-app >/dev/null 2>&1; then
-    nohup uwsm-app -- chromium --ozone-platform=wayland --app="${ATLAS_URL}" --start-fullscreen \
+    nohup uwsm-app -- chromium "${flags[@]}" \
       >/tmp/okbay-atlas-chrome.log 2>&1 &
   else
-    nohup chromium --ozone-platform=wayland --app="${ATLAS_URL}" --start-fullscreen \
+    nohup chromium "${flags[@]}" \
       >/tmp/okbay-atlas-chrome.log 2>&1 &
   fi
 }

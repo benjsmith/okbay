@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse, unquote
-from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, wiki
+from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, views, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -38,10 +38,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
-    def _html(self, text, code=200):
+    def _html(self, text, code=200, *, csp: str | None = None):
         body = text.encode()
         self.send_response(code)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        if csp:
+            self.send_header("Content-Security-Policy", csp)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -64,7 +66,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
     def do_GET(self):
@@ -118,6 +120,40 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/api/workspace", "/api/workspace/list"):
             from . import workroot
             return self._json(workroot.list_workspaces())
+        if path == "/api/views":
+            return self._json(views.list_views())
+        if path == "/api/views/pages":
+            try:
+                limit = int((q.get("limit") or ["5000"])[0])
+            except ValueError:
+                limit = 5000
+            return self._json(views.pages_table(limit=max(1, min(limit, 50000))))
+        if path.startswith("/api/views/"):
+            vid = unquote(path[len("/api/views/"):].strip("/"))
+            if "/" in vid or not vid:
+                return self._json({"error": "not found"}, 404)
+            item = views.get_view(vid)
+            if item is None:
+                return self._json({"error": "not found", "id": vid}, 404)
+            return self._json({"ok": True, "view": item})
+        # Sandboxed dynamic HTML decks (iframe src). Tight CSP; no parent access.
+        if path.startswith("/views/"):
+            vid = unquote(path[len("/views/"):].strip("/"))
+            if "/" in vid or not vid:
+                return self._json({"error": "not found"}, 404)
+            html = views.view_html(vid)
+            if html is None:
+                item = views.get_view(vid)
+                if item and item.get("url") and not str(item["url"]).startswith("/views/"):
+                    return self._json({"ok": True, "redirect": item["url"], "view": item})
+                return self._json({"error": "not found", "id": vid}, 404)
+            csp = (
+                "default-src 'none'; img-src data: https: http:; "
+                "style-src 'unsafe-inline'; font-src data:; "
+                "script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; "
+                "frame-ancestors 'self'"
+            )
+            return self._html(html, csp=csp)
         return self._json({"error": "not found"}, 404)
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -184,11 +220,42 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(desks.start(body.get("kind") or "curate", objective=body.get("objective") or ""))
         if path == "/api/desk/stop":
             return self._json(desks.stop(body.get("kind")))
+        if path == "/api/views":
+            try:
+                return self._json(views.publish_view(
+                    body.get("id") or "",
+                    title=body.get("title") or "",
+                    html=body.get("html"),
+                    url=body.get("url"),
+                    workspace=body.get("workspace"),
+                    ephemeral=bool(body.get("ephemeral")),
+                ))
+            except ValueError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
+        if path == "/api/reviews/accept-all":
+            return self._json(views.accept_all_reviews())
+        return self._json({"error": "not found"}, 404)
+
+    def do_DELETE(self):
+        path = urlparse(self.path).path
+        if path.startswith("/api/views/"):
+            vid = unquote(path[len("/api/views/"):].strip("/"))
+            if "/" in vid or not vid:
+                return self._json({"error": "not found"}, 404)
+            try:
+                return self._json(views.delete_view(vid))
+            except KeyError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 404)
+            except ValueError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
         return self._json({"error": "not found"}, 404)
 
 def main(port: int = 8766, host: str = "127.0.0.1") -> int:
     paths.ensure_workspace()
     status.snapshot()
+    # Warm stem→path index in background so /health is immediate but first
+    # /api/atlas/page is O(1) after the index lands (critical on 9p / Biocure).
+    wiki.warm_stem_index_background()
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"okbayd listening on http://{host}:{port} workspace={paths.workspace()}")
     try:
