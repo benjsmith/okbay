@@ -56,6 +56,8 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
     root = ws or paths.workspace()
     ready = (root / "wiki").exists()
     st = state or ("ready" if ready else "setup")
+    from . import viewer_mutex
+    vm = viewer_mutex.snapshot()
     return {
         "ts": time.time(),
         "state": st,
@@ -69,6 +71,8 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
         "message": "" if ready else "Run okbay setup",
         "version": "0.1.0",
         "daemon": "python",
+        "viewer_mode": vm["viewer_mode"],
+        "html_ui_enabled": vm["html_ui_enabled"],
     }
 
 def write(ws: Path | None = None, state: str | None = None) -> dict:

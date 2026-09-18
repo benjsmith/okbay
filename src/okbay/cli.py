@@ -56,6 +56,12 @@ def main(argv=None):
 
     priv = sub.add_parser("privacy"); priv.add_argument("path"); priv.add_argument("--json", action="store_true")
 
+    vw = sub.add_parser("viewer", help="HTML vs QML viewer mutex (charter Phase 5a)")
+    vwsub = vw.add_subparsers(dest="viewer_cmd", required=True)
+    vwsub.add_parser("status", help="Show viewer_mode / html_ui_enabled")
+    vset = vwsub.add_parser("set", help="Persist mode to ~/.config/okbay/viewer.json")
+    vset.add_argument("mode", choices=["html", "qml"])
+
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
@@ -130,4 +136,10 @@ def main(argv=None):
     if args.cmd == "privacy":
         from . import privacy_gate
         return _print(privacy_gate.scan_path(args.path), True)
+    if args.cmd == "viewer":
+        from . import viewer_mutex
+        if args.viewer_cmd == "status":
+            return _print(viewer_mutex.snapshot())
+        if args.viewer_cmd == "set":
+            return _print(viewer_mutex.set_mode(args.mode, source="cli"))
     return 1

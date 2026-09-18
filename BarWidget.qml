@@ -28,6 +28,7 @@ BarWidget {
   readonly property bool setupMode: Model.needsSetup(status)
   readonly property string apiUrl: (status && status.api_url) ? status.api_url : "http://127.0.0.1:8766"
   readonly property string atlasUrl: (status && status.atlas_url) ? status.atlas_url : (apiUrl + "/atlas")
+  readonly property bool htmlUiEnabled: !(status && status.html_ui_enabled === false)
 
   FileView {
     id: statusFile
@@ -76,6 +77,12 @@ BarWidget {
   }
 
   function runAtlasLauncher(urlOverride) {
+    // Charter Phase 5a: skip Chromium when QML viewer owns the surface.
+    if (!root.htmlUiEnabled) {
+      console.log("okbay: viewer_mode=qml — HTML atlas launcher suppressed")
+      root.summonOkbay('{"surface":"panel"}')
+      return
+    }
     // Prefer contrib/okbay-open-atlas.sh (focus-or-launch Chromium --class=OkbayAtlas).
     // OKBAY_ATLAS_URL overrides the default /atlas (e.g. #view=library).
     var url = urlOverride || root.atlasUrl

@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse, unquote
-from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, views, wiki
+from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, viewer_mutex, views, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -73,6 +73,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = parse_qs(u.query)
         path = u.path
+        # Charter #3: QML active ⇒ HTML atlas /views hosts off (JSON API stays).
+        if viewer_mutex.should_block_html_ui(path):
+            accept = (self.headers.get("Accept") or "").lower()
+            if "application/json" in accept:
+                return self._json(viewer_mutex.blocked_payload(path), 409)
+            return self._html(viewer_mutex.blocked_html_stub(path), 409)
         if path in ("/", "/atlas"):
             return self._html(_atlas_html())
         # Vendor + other atlas static assets (knowledge-atlas.js, fuse, …).
@@ -87,6 +93,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "version": __version__, "daemon": "python"})
         if path == "/api/status":
             return self._json(status.snapshot())
+        if path == "/api/viewer":
+            return self._json(viewer_mutex.snapshot())
         if path in ("/api/graph", "/graph"):
             return self._json(graph.load())
         # CE Atlas data bridge (CuriosityDataSource / CEData shape). See atlas_ce.py.
@@ -181,6 +189,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = self._body()
         path = urlparse(self.path).path
+        if path == "/api/viewer":
+            try:
+                return self._json(viewer_mutex.set_mode(
+                    body.get("mode") or body.get("viewer_mode") or "",
+                    source="api",
+                ))
+            except ValueError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
         if path == "/api/rebuild":
             return self._json(graph.rebuild())
         if path == "/api/atlas/enrich-kinds":
