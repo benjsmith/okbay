@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse, unquote
-from . import __version__, atlas_ce, core_skills, desks, graph, host_notify, ingest, locate, paths, reviews, search, status, theme, viewer_mutex, views, wiki
+from . import __version__, atlas_ce, core_skills, desks, graph, host_notify, ingest, locate, okstratr_harness, paths, reviews, search, status, theme, viewer_mutex, views, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -95,6 +95,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(status.snapshot())
         if path == "/api/core-skills/status":
             return self._json(core_skills.status(paths.workspace()))
+        if path == "/api/okstratr/harness":
+            try:
+                return self._json(okstratr_harness.list_harnesses())
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
         if path == "/api/viewer":
             return self._json(viewer_mutex.snapshot())
         if path in ("/api/graph", "/graph"):
@@ -195,6 +200,32 @@ class Handler(BaseHTTPRequestHandler):
             result = host_notify.receive(body)
             code = 200 if result.get("ok") else 400
             return self._json(result, code)
+        if path == "/api/okstratr/harness/enable":
+            hid = str(body.get("id") or body.get("harness") or "").strip()
+            try:
+                return self._json(okstratr_harness.enable_harness(hid))
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/okstratr/harness/disable":
+            hid = str(body.get("id") or body.get("harness") or "").strip()
+            try:
+                return self._json(okstratr_harness.disable_harness(hid))
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/okstratr/harness/set":
+            key = str(body.get("key") or "").strip()
+            value = body.get("value")
+            if value is None:
+                value = ""
+            try:
+                return self._json(okstratr_harness.set_harness_value(key, str(value)))
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/okstratr/harness/reload":
+            try:
+                return self._json(okstratr_harness.reload_harnesses())
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
         if path == "/api/viewer":
             try:
                 return self._json(viewer_mutex.set_mode(

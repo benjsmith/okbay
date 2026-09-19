@@ -16,32 +16,43 @@ See **[SKILL-SHELL-INVENTORY.md](./SKILL-SHELL-INVENTORY.md)** §D–E for the P
 - Hosted mode (`host=okbay`): okstratr HTML settings pages stay off.
 
 ```bash
-okstratr harness list
-okstratr harness detect
-okstratr harness enable <id>
-okstratr harness disable <id>
+okbay harness list|enable|disable|set|reload   # preferred (thin client)
+okstratr harness list|detect|enable|disable    # upstream CLI still ok
 ```
 
 
-## Thin client pattern (Switchbay precedent; okbay follow-up)
+## Thin client (Switchbay parity)
 
-Switchbay exposes path-native okstratr façades so shells/UI never hard-code
-embed upstreams:
+okbay mirrors Switchbay ADR-005: a **thin client** over okstratr
+`harnesses.toml` — no second allowlist under okbay state.
 
-| Concern | Switchbay route | Upstream SSOT |
-|---------|-----------------|---------------|
-| Host notify (C2) | `POST /api/okstratr/host-notify` | okstratr → rail |
-| Harness registry | `GET/POST /api/okstratr/harness…` | okstratr `harnesses.toml` |
-| Same-origin embed | `/embed/okstratr/api/harness…` | loopback :8767 |
+| Surface | Path / command |
+|---------|----------------|
+| List | `GET /api/okstratr/harness` · `okbay harness list` |
+| Enable | `POST /api/okstratr/harness/enable` `{ "id" }` · `okbay harness enable <id>` |
+| Disable | `POST /api/okstratr/harness/disable` `{ "id" }` · `okbay harness disable <id>` |
+| Set | `POST /api/okstratr/harness/set` `{ "key", "value" }` · `okbay harness set <key> [value]` |
+| Reload | `POST /api/okstratr/harness/reload` · `okbay harness reload` |
 
-okbay should use the **same thin-client shape** when wiring settings:
+Implementation: `okbay.okstratr_harness` posts to
+`OKBAY_OKSTRATR_UPSTREAM` (default `http://127.0.0.1:8767`) with
+`X-Okstratr-Host: okbay`, loopback-guarded. Responses are normalized
+(`ssot: okstratr`) and never invent an allowlist.
 
-- Prefer a local `/api/okstratr/harness` (and enable/disable/set) that
-  calls okstratr with `X-Okstratr-Host: okbay`.
-- Browser may use proxied `/embed/okstratr/…` when that proxy exists.
-- **Do not** invent an okbay-side allowlist file.
-- Full okbay settings UI for harness toggles is a follow-up; until then
-  CLI (`okstratr harness …`) and/or Switchbay Settings remain the write path.
+```bash
+okbay harness list
+okbay harness enable grok
+okbay harness disable codex
+okbay harness set harness.grok.default_model grok-4
+okbay harness reload
+curl -s http://127.0.0.1:8766/api/okstratr/harness | jq .
+```
+
+`okbay status` / `GET /api/status` include a cheap `harness_registry`
+pointer (no upstream call). Rich Atlas Settings UI remains a follow-up;
+CLI + daemon routes are first-class for bare-adjacent Omarchy users.
+
+Upstream CLI still works: `okstratr harness list|enable|…`.
 
 See Switchbay `docs/ADR-005-okstratr-harness-registry-client.md`.
 

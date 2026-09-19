@@ -83,6 +83,21 @@ def main(argv=None):
     cs_ensure.add_argument("--wait", action="store_true", help="Block until okstratr /health")
     cs_ensure.add_argument("--no-keep-alive", action="store_true", help="Skip background supervisor")
 
+    hr = sub.add_parser(
+        "harness",
+        help="okstratr harness registry SSOT (thin client; no okbay allowlist)",
+    )
+    hrsub = hr.add_subparsers(dest="harness_cmd", required=True)
+    hrsub.add_parser("list", help="List harnesses from okstratr (GET /api/harness)")
+    hren = hrsub.add_parser("enable", help="Enable harness id")
+    hren.add_argument("id", help="Harness id (e.g. grok)")
+    hrdis = hrsub.add_parser("disable", help="Disable harness id")
+    hrdis.add_argument("id", help="Harness id")
+    hrset = hrsub.add_parser("set", help="Set registry key (e.g. harness.grok.default_model)")
+    hrset.add_argument("key")
+    hrset.add_argument("value", nargs="?", default="")
+    hrsub.add_parser("reload", help="Reload harnesses.toml on okstratr")
+
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
@@ -183,4 +198,23 @@ def main(argv=None):
             )
             _print(out)
             return 0 if out.get("ok") else 1
+    if args.cmd == "harness":
+        from . import okstratr_harness
+        try:
+            if args.harness_cmd == "list":
+                out = okstratr_harness.list_harnesses()
+            elif args.harness_cmd == "enable":
+                out = okstratr_harness.enable_harness(args.id)
+            elif args.harness_cmd == "disable":
+                out = okstratr_harness.disable_harness(args.id)
+            elif args.harness_cmd == "set":
+                out = okstratr_harness.set_harness_value(args.key, args.value)
+            elif args.harness_cmd == "reload":
+                out = okstratr_harness.reload_harnesses()
+            else:
+                return 1
+        except okstratr_harness.OkstratrHarnessError as e:
+            _print(okstratr_harness.error_payload(e), True)
+            return 1
+        return _print(out, True)
     return 1

@@ -64,6 +64,11 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
         health = core_skills.status(root)
     except Exception:
         health = None
+    try:
+        from . import okstratr_harness
+        harness = okstratr_harness.status_hint()
+    except Exception:
+        harness = {"ssot": "okstratr", "api": "/api/okstratr/harness"}
     return {
         "ts": time.time(),
         "state": st,
@@ -80,6 +85,7 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
         "viewer_mode": vm["viewer_mode"],
         "html_ui_enabled": vm["html_ui_enabled"],
         "health": health,
+        "harness_registry": harness,
     }
 
 def write(ws: Path | None = None, state: str | None = None) -> dict:

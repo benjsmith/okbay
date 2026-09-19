@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **okstratr harness registry thin client**: `okbay.okstratr_harness` + `GET/POST /api/okstratr/harness*` + `okbay harness list|enable|disable|set|reload` (`X-Okstratr-Host: okbay`); status `harness_registry` pointer; docs `HERDR-AND-REGISTRY.md`.
 - **Session auto-start (C1)**: on `okbay serve`, auto-start okstratr (`:8767`) + claim CE APIs (`:8766`); `okbay core-skills status|ensure` + `GET /api/core-skills/status`; QML mutex still blocks HTML atlas host.
 - **Path-native host_notify → Herdr**: `POST /api/okstratr/host-notify` + `okbay host-notify` map okstratr envelopes to `~/.local/state/okbay/herdr-notify.jsonl` + `herdr:` stderr (contract C2).
 - **Viewer source body**: `GET /api/atlas/source` (vault path sandbox) + views-shell renders source HTML; wiki↔source history preserved.
