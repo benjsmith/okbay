@@ -62,6 +62,17 @@ def main(argv=None):
     vset = vwsub.add_parser("set", help="Persist mode to ~/.config/okbay/viewer.json")
     vset.add_argument("mode", choices=["html", "qml"])
 
+    hn = sub.add_parser(
+        "host-notify",
+        help="Receive okstratr.host_notify envelope → Herdr stub (JSON arg or stdin)",
+    )
+    hn.add_argument(
+        "envelope",
+        nargs="?",
+        help="JSON envelope string; omit to read stdin",
+    )
+    hn.add_argument("--json", action="store_true", help="Print result as JSON")
+
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
@@ -142,4 +153,12 @@ def main(argv=None):
             return _print(viewer_mutex.snapshot())
         if args.viewer_cmd == "set":
             return _print(viewer_mutex.set_mode(args.mode, source="cli"))
+    if args.cmd == "host-notify":
+        from . import host_notify
+        raw = args.envelope
+        if raw is None:
+            raw = sys.stdin.read()
+        result = host_notify.receive_json_text(raw)
+        _print(result, True)
+        return 0 if result.get("ok") else 1
     return 1

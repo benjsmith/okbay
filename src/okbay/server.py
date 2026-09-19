@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse, unquote
-from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, viewer_mutex, views, wiki
+from . import __version__, atlas_ce, desks, graph, host_notify, ingest, locate, paths, reviews, search, status, theme, viewer_mutex, views, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -189,6 +189,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = self._body()
         path = urlparse(self.path).path
+        if path == "/api/okstratr/host-notify":
+            result = host_notify.receive(body)
+            code = 200 if result.get("ok") else 400
+            return self._json(result, code)
         if path == "/api/viewer":
             try:
                 return self._json(viewer_mutex.set_mode(

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Path-native host_notify → Herdr**: `POST /api/okstratr/host-notify` + `okbay host-notify` map okstratr envelopes to `~/.local/state/okbay/herdr-notify.jsonl` + `herdr:` stderr (contract C2).
 - **Viewer source body**: `GET /api/atlas/source` (vault path sandbox) + views-shell renders source HTML; wiki↔source history preserved.
 - **Bar / menu**: left-click Atlas launcher; right-click Library `#view=library`; menu Library entry.
 - **Hypr OkbayAtlas**: `contrib/okbay-atlas.conf` + `install-okbay-atlas-rules.sh` / setup.sh → `hyprctl reload`.
