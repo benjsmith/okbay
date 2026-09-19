@@ -58,6 +58,12 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
     st = state or ("ready" if ready else "setup")
     from . import viewer_mutex
     vm = viewer_mutex.snapshot()
+    # Cheap C1 core-skills health (no network spawn); full shape via /api/core-skills/status.
+    try:
+        from . import core_skills
+        health = core_skills.status(root)
+    except Exception:
+        health = None
     return {
         "ts": time.time(),
         "state": st,
@@ -73,6 +79,7 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
         "daemon": "python",
         "viewer_mode": vm["viewer_mode"],
         "html_ui_enabled": vm["html_ui_enabled"],
+        "health": health,
     }
 
 def write(ws: Path | None = None, state: str | None = None) -> dict:

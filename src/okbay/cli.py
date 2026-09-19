@@ -73,6 +73,16 @@ def main(argv=None):
     )
     hn.add_argument("--json", action="store_true", help="Print result as JSON")
 
+    cs = sub.add_parser(
+        "core-skills",
+        help="CE + okstratr auto-start / C1 health (contract C1)",
+    )
+    cssub = cs.add_subparsers(dest="core_skills_cmd", required=True)
+    cssub.add_parser("status", help="Show ce/okstratr/wiki_build health shape")
+    cs_ensure = cssub.add_parser("ensure", help="Start CE APIs claim + okstratr serve")
+    cs_ensure.add_argument("--wait", action="store_true", help="Block until okstratr /health")
+    cs_ensure.add_argument("--no-keep-alive", action="store_true", help="Skip background supervisor")
+
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
@@ -161,4 +171,16 @@ def main(argv=None):
         result = host_notify.receive_json_text(raw)
         _print(result, True)
         return 0 if result.get("ok") else 1
+    if args.cmd == "core-skills":
+        from . import core_skills, paths
+        if args.core_skills_cmd == "status":
+            return _print(core_skills.status(paths.workspace()))
+        if args.core_skills_cmd == "ensure":
+            out = core_skills.ensure_started(
+                paths.workspace(),
+                keep_alive=not bool(args.no_keep_alive),
+                wait_okstratr=bool(args.wait),
+            )
+            _print(out)
+            return 0 if out.get("ok") else 1
     return 1

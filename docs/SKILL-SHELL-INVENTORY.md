@@ -89,6 +89,21 @@ QML: `Panel.qml` / `Overlay.qml` / `BarWidget.qml` skip Chromium when `html_ui_e
 3. When `host=okbay`, okstratr must refuse to serve its own HTML settings pages (hosted mode).
 4. Read path: `okstratr harness list|detect`; write path: `okstratr harness enable|disable` (or HTTP equivalents under `/embed/okstratr/` once proxy lands).
 
+## Session auto-start (C1)
+
+Ben lock: **always** auto-start CE + okstratr with the okbay session (not opt-in).
+
+| Module | Role |
+|--------|------|
+| `src/okbay/okstratr_supervisor.py` | Spawn/keep ``okstratr serve`` on `:8767` (`OKSTRATR_HOST=okbay`) |
+| `src/okbay/ce_supervisor.py` | CE SSOT via okbay APIs on `:8766`; respect `viewer_mutex` (no HTML atlas when QML) |
+| `src/okbay/core_skills.py` | Combined ensure + `/api/core-skills/status` shape |
+| `okbay serve` | Calls `core_skills.ensure_started` on daemon start |
+
+CLI: `okbay core-skills status|ensure` · HTTP: `GET /api/core-skills/status`
+
+See also `docs/HERDR-AND-REGISTRY.md` §Session auto-start and umbrella `CONTRACT-AUTO-START-AND-NOTIFY.md`.
+
 ## Phase 5a deliverables checklist
 
 - [x] This inventory
@@ -97,6 +112,7 @@ QML: `Panel.qml` / `Overlay.qml` / `BarWidget.qml` skip Chromium when `html_ui_e
 - [x] QML Chromium suppress hooks
 - [x] Tests for mutex policy
 - [x] Herdr-only + registry contracts documented
+- [x] Session auto-start CE + okstratr (C1) + `/api/core-skills/status`
 - [ ] setup.sh installs CE+CM+okstratr (later slice)
 - [ ] Rust okbayd HTML gate parity
 - [ ] Same-origin `/embed/ce/` + `/embed/okstratr/` proxy

@@ -49,3 +49,27 @@ echo '{...}' | okbay host-notify
 
 Herdr (or a future bridge) should **tail** the JSONL; full Herdr ingest API can
 replace the stub later without changing the envelope contract.
+
+## Session auto-start (contract C1)
+
+On ``okbay serve`` / daemon start, okbay **always** brings up core skills:
+
+| Skill | Action | Port / URL |
+|-------|--------|------------|
+| **okstratr** | ``okstratr serve --host 127.0.0.1 --port 8767`` (keep-alive supervisor) | ``http://127.0.0.1:8767`` |
+| **CE** | Claim okbay JSON APIs as CE data plane; warm wiki/status | ``http://127.0.0.1:8766`` |
+
+Viewer mutex: when ``viewer_mode=qml``, HTML ``/`` ``/atlas`` ``/views/*`` stay **off**; backends (okstratr + CE APIs) still start. Optional external ``viewer.sh`` only if ``OKBAY_CE_EXTERNAL_VIEWER=1`` **and** HTML mode (side port ``OKBAY_CE_VIEWER_PORT``, default 8090).
+
+### Status
+
+```bash
+okbay core-skills status
+# or
+curl -s http://127.0.0.1:8766/api/core-skills/status
+```
+
+C1 shape: ``{ "ce": {...}, "okstratr": {...}, "wiki_build": {...} }``. Also embedded under ``health`` in ``/api/status`` / ``okbay status``.
+
+Env overrides: ``OKBAY_OKSTRATR_UPSTREAM``, ``OKBAY_OKSTRATR_BIN``, ``OKBAY_CE_UPSTREAM``.
+

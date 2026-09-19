@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse, unquote
-from . import __version__, atlas_ce, desks, graph, host_notify, ingest, locate, paths, reviews, search, status, theme, viewer_mutex, views, wiki
+from . import __version__, atlas_ce, core_skills, desks, graph, host_notify, ingest, locate, paths, reviews, search, status, theme, viewer_mutex, views, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -93,6 +93,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "version": __version__, "daemon": "python"})
         if path == "/api/status":
             return self._json(status.snapshot())
+        if path == "/api/core-skills/status":
+            return self._json(core_skills.status(paths.workspace()))
         if path == "/api/viewer":
             return self._json(viewer_mutex.snapshot())
         if path in ("/api/graph", "/graph"):
@@ -288,6 +290,13 @@ class Handler(BaseHTTPRequestHandler):
 def main(port: int = 8766, host: str = "127.0.0.1") -> int:
     paths.ensure_workspace()
     status.snapshot()
+    # C1: always auto-start CE + okstratr with the session (Ben lock).
+    # CE data/APIs = this daemon; okstratr spawned on :8767. Mutex: no HTML
+    # atlas host when QML — backends still start.
+    try:
+        core_skills.ensure_started(paths.workspace(), keep_alive=True)
+    except Exception as exc:  # noqa: BLE001 — never block serve on spawn fail
+        print(f"okbayd: core-skills auto-start warning: {exc}")
     # Warm stem→path index in background so /health is immediate but first
     # /api/atlas/page is O(1) after the index lands (critical on 9p / Biocure).
     wiki.warm_stem_index_background()
