@@ -23,6 +23,29 @@ okstratr harness disable <id>
 ```
 
 
+## Thin client pattern (Switchbay precedent; okbay follow-up)
+
+Switchbay exposes path-native okstratr façades so shells/UI never hard-code
+embed upstreams:
+
+| Concern | Switchbay route | Upstream SSOT |
+|---------|-----------------|---------------|
+| Host notify (C2) | `POST /api/okstratr/host-notify` | okstratr → rail |
+| Harness registry | `GET/POST /api/okstratr/harness…` | okstratr `harnesses.toml` |
+| Same-origin embed | `/embed/okstratr/api/harness…` | loopback :8767 |
+
+okbay should use the **same thin-client shape** when wiring settings:
+
+- Prefer a local `/api/okstratr/harness` (and enable/disable/set) that
+  calls okstratr with `X-Okstratr-Host: okbay`.
+- Browser may use proxied `/embed/okstratr/…` when that proxy exists.
+- **Do not** invent an okbay-side allowlist file.
+- Full okbay settings UI for harness toggles is a follow-up; until then
+  CLI (`okstratr harness …`) and/or Switchbay Settings remain the write path.
+
+See Switchbay `docs/ADR-005-okstratr-harness-registry-client.md`.
+
+
 ## Path-native notify (contract C2)
 
 Schedule / desk progress on the okbay path goes to **Herdr only** — not OS notify,
