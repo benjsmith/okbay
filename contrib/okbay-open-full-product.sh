@@ -145,6 +145,23 @@ print(d.get("workspace") or "")
 ' 2>/dev/null
 }
 
+
+ensure_html_viewer() {
+  # Full-product Chromium Atlas requires HTML host (qml → /atlas 409).
+  mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/okbay"
+  if command -v okbay >/dev/null 2>&1; then
+    okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
+      || OKBAY_WORKSPACE="${OKBAY_WORKSPACE:-}" okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
+      || true
+  elif [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
+    PYTHONPATH="${HOME}/src/okbay/src" python3 -m okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 || true
+  else
+    printf '%s\n' '{"mode":"html","source":"full-product"}' >"${HOME}/.config/okbay/viewer.json"
+  fi
+  export OKBAY_VIEWER_MODE=html
+  log "viewer mode html (full-product)"
+}
+
 ensure_okbay_serve() {
   # Serve BioCure freeze on :8766 before Atlas opens.
   local want="${OKBAY_WORKSPACE:-}"
@@ -200,29 +217,29 @@ ensure_okbay_serve() {
     if curl -fsS -m 2 "${OKBAY_URL}/health" >/dev/null 2>&1 \
       || curl -fsS -m 2 "${OKBAY_URL}/api/status" >/dev/null 2>&1; then
       log "okbay already serving desired workspace"
-      return 0
+      ensure_html_viewer
+      # Persist via API too (in-process if no env override)
+      curl -fsS -m 2 -X POST "${OKBAY_URL}/api/viewer" \
+        -H 'Content-Type: application/json' \
+        -d '{"mode":"html"}' >/dev/null 2>&1 || true
+      # If /atlas still 409 (daemon env stuck on qml), force restart
+      atlas_code="$(curl -sS -m 2 -o /dev/null -w '%{http_code}' "${OKBAY_URL}/atlas" 2>/dev/null || echo 000)"
+      if [[ "$atlas_code" == "409" ]]; then
+        log "atlas still HTTP $atlas_code after viewer set — forcing okbayd restart"
+        need_restart=1
+      else
+        log "atlas HTTP ${atlas_code:-?} (html host ok)"
+        return 0
+      fi
+    else
+      need_restart=1
     fi
-    need_restart=1
   fi
 
   log "okbayd restarting with OKBAY_WORKSPACE=$want"
-  # State + config dirs before any serve/setup (viewer mutex + workspace marker)
   mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/okbay"
   printf '%s\n' "$want" >"${HOME}/.local/state/okbay/workspace" 2>/dev/null || true
-
-  # Full-product needs HTML Atlas host (qml → /atlas 409). Prefer CLI; else write viewer.json.
-  if command -v okbay >/dev/null 2>&1; then
-    okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
-      || OKBAY_WORKSPACE="$want" okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
-      || true
-  elif [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
-    OKBAY_WORKSPACE="$want" PYTHONPATH="${HOME}/src/okbay/src" \
-      python3 -m okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 || true
-  else
-    printf '%s\n' '{"mode":"html","source":"full-product"}' >"${HOME}/.config/okbay/viewer.json"
-  fi
-  export OKBAY_VIEWER_MODE=html
-  log "viewer mode html (full-product)"
+  ensure_html_viewer
 
   if command -v systemctl >/dev/null 2>&1; then
     systemctl --user stop okbayd.service 2>/dev/null || true
