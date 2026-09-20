@@ -50,3 +50,5 @@
 
 - First cut of the Omarchy plugin: QML surfaces + okbayd + CLI + MCP + three skills.
 - Workspace `~/Work/okbay`, port 8766, propose→review gate, Atlas overlay, standing desks.
+
+- Omarchy 0.56: float action=set tiles floating windows; arrange uses toggle-only + proven 2x2 recipe (live green on Mac Mini).

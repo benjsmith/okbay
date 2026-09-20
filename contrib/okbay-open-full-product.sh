@@ -419,7 +419,9 @@ for c in clients:
             # NEVER float-unset — dumps product panes into dwindle before arrange.
             dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
             dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
-            dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
+            # Omarchy: action=set TILES floating windows — only toggle when tiled
+            if not c.get("floating"):
+                dsp(f'hl.dsp.window.float({{ action = "toggle", window = "address:{addr}" }})')
             print("unset fs keep float on target Atlas", addr)
         continue
     print("close stale Atlas", addr, "ws", ws_id, ws_name, "fs", fs)
@@ -542,7 +544,8 @@ for c in clients:
     # NEVER float-unset — arrange needs float set for absolute 2x2 place.
     if fs_on:
         dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
-    dsp("hl.dsp.window.float({ action = \"set\", window = \"address:%s\" })" % addr)
+    if not c.get("floating"):
+        dsp("hl.dsp.window.float({ action = \"toggle\", window = \"address:%s\" })" % addr)
 ' 2>/dev/null || true
   fi
 }

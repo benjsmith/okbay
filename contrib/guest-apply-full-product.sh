@@ -1,98 +1,13 @@
 #!/usr/bin/env bash
-# Apply okbay full-product 2x2 launcher onto a live Omarchy guest.
-# Prefer from Mac Mini host:
-#   ssh omarchy 'bash -s' < contrib/guest-apply-full-product.sh
-#   # or: ssh -p 2222 benj@127.0.0.1 'bash -s' < contrib/guest-apply-full-product.sh
-# On guest after git pull of feat/skill-shell-rationalization:
-#   bash ~/src/okbay/contrib/guest-apply-full-product.sh
+# Always install tip contrib scripts into ~/.local/bin (md5 must match).
 set -euo pipefail
-REPO="${OKBAY_SRC:-$HOME/src/okbay}"
-BRANCH="${OKBAY_BRANCH:-feat/skill-shell-rationalization}"
-LIVE_BIN="${HOME}/.local/bin/okbay-open-full-product.sh"
-PLUGIN_CONTRIB="${HOME}/.config/omarchy/plugins/benjsmith.okbay/contrib"
-
-cd "$REPO"
-git fetch origin
-git checkout "$BRANCH"
-git pull --ff-only origin "$BRANCH"
-
-mkdir -p "${HOME}/.local/bin" "$PLUGIN_CONTRIB"
-for f in okbay-open-full-product.sh okbay-open-atlas.sh okbay-arrange-full-product.py; do
-  install -m 0755 "$REPO/contrib/$f" "${HOME}/.local/bin/$f"
-  install -m 0755 "$REPO/contrib/$f" "$PLUGIN_CONTRIB/$f"
-done
-install -m 0644 "$REPO/contrib/hypr-bindings.lua" "$PLUGIN_CONTRIB/hypr-bindings.lua"
-
-# Default OKBAY_WORKSPACE → BioCure freeze tip 5b9711895 (not hybrid 76142912).
-BIOCURE=""
-for cand in \
-  "/mnt/mac/Workspaces/biocure-confirm-v1-query-5b9711895" \
-  "${HOME}/Workspaces/biocure-confirm-v1-query-5b9711895" \
-  "${HOME}/Work/Workspaces/biocure-confirm-v1-query-5b9711895"
-do
-  if [[ -d "$cand" ]]; then BIOCURE="$cand"; break; fi
-done
-# Always ensure state dir exists (serve/setup markers)
-mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/okbay"
-
-# Full-product Chromium Atlas needs HTML viewer (qml → /atlas 409)
-if command -v okbay >/dev/null 2>&1; then
-  okbay viewer set html >/tmp/okbay-viewer.log 2>&1 || true
-elif [[ -d "$REPO/src/okbay" ]]; then
-  PYTHONPATH="$REPO/src" python3 -m okbay viewer set html >/tmp/okbay-viewer.log 2>&1 || true
-else
-  printf '%s\n' '{"mode":"html","source":"guest-apply-full-product"}' >"${HOME}/.config/okbay/viewer.json"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+install -m 0755 "$ROOT/contrib/okbay-arrange-full-product.py" "$HOME/.local/bin/okbay-arrange-full-product.py"
+install -m 0755 "$ROOT/contrib/okbay-open-full-product.sh" "$HOME/.local/bin/okbay-open-full-product.sh"
+install -m 0755 "$ROOT/contrib/okbay-open-atlas.sh" "$HOME/.local/bin/okbay-open-atlas.sh"
+if [[ -f "$ROOT/contrib/okbay-atlas.conf" ]]; then
+  mkdir -p "$HOME/.config/hypr"
+  cp -f "$ROOT/contrib/okbay-atlas.conf" "$HOME/.config/hypr/okbay-atlas.conf"
 fi
-echo "guest-apply: viewer mode html"
-
-if [[ -n "$BIOCURE" ]]; then
-  mkdir -p "${HOME}/.config/systemd/user/okbayd.service.d"
-  printf '%s\n' "$BIOCURE" >"${HOME}/.local/state/okbay/workspace"
-  cat >"${HOME}/.config/systemd/user/okbayd.service.d/workspace.conf" <<EOF
-[Service]
-Environment=OKBAY_WORKSPACE=$BIOCURE
-Environment=OKBAY_VIEWER_MODE=html
-EOF
-  systemctl --user daemon-reload 2>/dev/null || true
-  # Restart daemon so :8766 serves BioCure + HTML atlas before next Super+Shift+K
-  if systemctl --user is-enabled okbayd.service >/dev/null 2>&1 \
-    || systemctl --user status okbayd.service >/dev/null 2>&1; then
-    OKBAY_WORKSPACE="$BIOCURE" OKBAY_VIEWER_MODE=html systemctl --user restart okbayd.service 2>/dev/null || true
-  fi
-  echo "guest-apply: OKBAY_WORKSPACE=$BIOCURE"
-fi
-
-
-BINDINGS_LUA="${HOME}/.config/hypr/bindings.lua"
-mkdir -p "${HOME}/.config/hypr"
-if [[ ! -f "$BINDINGS_LUA" ]]; then
-  cp "$REPO/contrib/hypr-bindings.lua" "$BINDINGS_LUA"
-elif ! grep -q 'okbay-open-full-product.sh' "$BINDINGS_LUA" 2>/dev/null; then
-  cat >> "$BINDINGS_LUA" <<'BINDEOF'
-
--- OKBay full product 2x2 (guest-apply-full-product.sh)
-hl.unbind("SUPER + SHIFT + K")
-o.bind("SUPER + SHIFT + K", "OKBay full product (2x2 workspace)", {
-  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
-})
-hl.unbind("SUPER + CTRL + K")
-o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
-  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
-})
-BINDEOF
-fi
-
-if ! grep -q 'SUPER + ALT + S' "$BINDINGS_LUA" 2>/dev/null; then
-  cat >> "$BINDINGS_LUA" <<'NOTEOF'
-
--- Personal (Mac Mini): keep Super+Shift+S as screenshot; Maps on Super+Alt+S
--- (NOT Super+Shift+M — that is Omarchy Music). Uncomment if needed:
--- hl.unbind("SUPER + SHIFT + S")
--- o.bind("SUPER + ALT + S", "Maps", { launch = "omarchy-launch-webapp https://maps.google.com" })
-NOTEOF
-fi
-
-hyprctl reload 2>/dev/null || true
-echo "guest-apply-full-product: $(git rev-parse --short HEAD) -> $LIVE_BIN"
-echo "Verify: Super+Shift+K (or: $LIVE_BIN) -> new workspace 2x2 Atlas|Nautilus / Herdr|okstratr"
-echo "Log: /tmp/okbay-full-product.log"
+echo "APPLIED $(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+md5sum "$HOME/.local/bin/okbay-arrange-full-product.py" "$ROOT/contrib/okbay-arrange-full-product.py"
