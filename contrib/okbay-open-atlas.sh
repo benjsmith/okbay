@@ -82,13 +82,17 @@ launch_atlas_chromium() {
   # --app= : frameless Chromium app window (no tab strip / omnibox).
   # --class= : Hyprland windowrule target (OkbayAtlas).
   # --name= : X11/Wayland app_id hint on some Chromium builds.
+  # OKBAY_ATLAS_TILED=1 (full-product 2x2): skip --start-fullscreen so the
+  # pane can sit in a workspace grid instead of covering the prior desktop.
   local flags=(
     --ozone-platform=wayland
     --class="${ATLAS_CLASS}"
     --name="${ATLAS_CLASS}"
     --app="${ATLAS_URL}"
-    --start-fullscreen
   )
+  if [[ "${OKBAY_ATLAS_TILED:-0}" != "1" ]]; then
+    flags+=(--start-fullscreen)
+  fi
   if command -v uwsm-app >/dev/null 2>&1; then
     nohup uwsm-app -- chromium "${flags[@]}" \
       >/tmp/okbay-atlas-chrome.log 2>&1 &

@@ -7,10 +7,16 @@
 -- Note: Omarchy default Super+Shift+O is Obsidian (preinstalled); Okstratr owns
 -- that override (okstratr-only panel). OKBay full-product uses Super+Shift+K.
 -- On Mac host key steal of Super+Shift+K, use Super+Ctrl+K (same launcher).
+--
+-- Personal chord note (do NOT edit /usr/share/omarchy defaults): live Mac Mini
+-- guest already moves Omarchy Maps off Super+Shift+S via personal unbind so
+-- Super+Shift+S stays screenshot; Maps lives on Super+Shift+M. Mirror that in
+-- ~/.config/hypr/bindings.lua only — never patch /usr/share/omarchy/default/….
 
--- Full product: okstratr summon + best-effort Herdr desk + Atlas opener.
+-- Full product: new/empty Hyprland workspace + 2x2 panes
+-- (Atlas TL, Nautilus TR, Herdr BL, okstratr BR). Not float-over-current.
 hl.unbind("SUPER + SHIFT + K")
-o.bind("SUPER + SHIFT + K", "OKBay full product", {
+o.bind("SUPER + SHIFT + K", "OKBay full product (2x2 workspace)", {
   launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
 })
 
@@ -34,11 +40,12 @@ o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
     contrib/install-okbay-atlas-rules.sh
     hyprctl reload
 
-  Chromium --app= + --class=OkbayAtlas (see okbay-open-atlas.sh). Rules:
+  Chromium --app= + --class=OkbayAtlas (see okbay-open-atlas.sh). Solo Atlas
+  may use float/fullscreen rules; full-product Super+Shift+K launches with
+  OKBAY_ATLAS_TILED=1 and arranges a 2x2 grid on a fresh workspace — the
+  launcher unsets fullscreen so Atlas does not cover the prior desktop.
 
-    windowrulev2 = float, class:^(OkbayAtlas)$
-    windowrulev2 = fullscreen, class:^(OkbayAtlas)$
-
-  Full-product launcher summons okstratr then focus-or-launches one Atlas
-  Chromium — do not also summon the Quickshell atlas surface on K (double-window).
+  Optional personal binds (user ~/.config/hypr/bindings.lua only):
+    hl.unbind("SUPER + SHIFT + S")  -- keep screenshot; Maps → Super+Shift+M
+    o.bind("SUPER + SHIFT + M", "Maps", { … })
 ]]

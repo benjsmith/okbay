@@ -3,7 +3,7 @@
 **Date:** 2026-09-13 (Europe/Zurich)  
 **Status:** In-page set **implemented** (+ chrome parity 2026-09-13: ingest, workspace, edges, viewer, minimap, help).  
 **Scope:** Match Omarchy’s binding + Super+K discovery pattern; Atlas chords that work under Chromium `--app=` kiosk.
-**Hypr:** optional `contrib/hypr-bindings.lua` (`Super+Shift+K` → full product; `Super+Ctrl+K` Mac alt; `Super+Shift+O` = Okstratr only) — merge into `~/.config/hypr/bindings.lua` when ready.
+**Hypr:** optional `contrib/hypr-bindings.lua` (`Super+Shift+K` → full-product **2x2 workspace**; `Super+Ctrl+K` Mac alt; `Super+Shift+O` = Okstratr only) — merge into `~/.config/hypr/bindings.lua` when ready. Personal note: keep **Super+Shift+S** = screenshot (unbind Maps); Maps → **Super+Shift+M** — never edit `/usr/share/omarchy` defaults.
 
 ---
 
@@ -33,7 +33,7 @@ So Atlas actions do **not** “nest under Super+K” as a prefix menu. The Omarc
 - **User config:** `~/.config/hypr/bindings.lua` — add, or `hl.unbind` then rebind. Flags: `omarchy_default_bindings`, `omarchy_preinstalled_bindings` in `hyprland.lua`.
 - **Inspect:** `omarchy-menu-keybindings --print` (or Super+K UI).
 
-When replacing a bind, call `hl.unbind` for the chord before `o.bind`; otherwise Omarchy's original and the replacement can both fire. On Try Omarchy the Mac `⌘` key is Hyprland's `Super`: Okstratr's `Super+Shift+O` override must launch with `OMARCHY_PATH=/usr/share/omarchy`, while OKBay replaces `Super+Shift+K` with the full-product launcher (okstratr + Herdr + Atlas; `Super+Ctrl+K` Mac alt).
+When replacing a bind, call `hl.unbind` for the chord before `o.bind`; otherwise Omarchy's original and the replacement can both fire. On Try Omarchy the Mac `⌘` key is Hyprland's `Super`: Okstratr's `Super+Shift+O` override must launch with `OMARCHY_PATH=/usr/share/omarchy`, while OKBay replaces `Super+Shift+K` with the full-product **2x2 workspace** launcher (Atlas TL, Nautilus TR, Herdr BL, okstratr BR; `Super+Ctrl+K` Mac alt).
 
 ### 1.3 Okbay today (no Atlas key chords yet)
 
@@ -98,7 +98,7 @@ From `/usr/share/omarchy/default/hypr/bindings/tiling.lua` + hotkeys manual:
 
 | Action | Proposed chord | Layer | Notes |
 |--------|----------------|-------|-------|
-| Open full product (okstratr + Herdr + Atlas) | **`Super + Shift + K`** (Mac alt: **`Super + Ctrl + K`**) | Hypr | **`contrib/okbay-open-full-product.sh`** via `contrib/hypr-bindings.lua`: summon okstratr panel, best-effort Herdr desk/launch, then **`okbay-open-atlas.sh`** focus-or-launch. `setup.sh` installs both scripts + merges binds. Okstratr-only remains **Super+Shift+O**. |
+| Open full product (2x2 workspace) | **`Super + Shift + K`** (Mac alt: **`Super + Ctrl + K`**) | Hypr | **`contrib/okbay-open-full-product.sh`**: switch to next-empty / `OKBAY_FULL_PRODUCT_WS` / `special:okbay`, ensure okstratr serve, populate **TL Atlas · TR Nautilus · BL Herdr · BR okstratr** (not float-fullscreen over prior desktops). Live guest path: `/home/benj/.local/bin/okbay-open-full-product.sh`. Okstratr-only remains **Super+Shift+O**. |
 | Open Reviews panel | *(already)* **`Super + Ctrl + 1`** | Hypr | Keep; document. Optional alias in Okbay menu only. |
 | **Focus search** | **`/`** (and optionally `Ctrl + F`) | Page | **Implemented.** Focus `#sidebar-search`, select-all if non-empty. Ignore when editable **except** Ctrl+F always (`preventDefault`). |
 | **Label mode cycle** | **`l`** | Page | **Implemented.** Cycle `auto → on → off` (`Controls.cycleMode`). |
@@ -128,8 +128,9 @@ Registering Hypr binds with good `description` strings **is** how they “show u
 
 | Chord | Description | Command sketch |
 |-------|-------------|----------------|
-| `Super + Shift + K` | OKBay full product | okstratr summon + Herdr + Atlas |
-| `Super + Ctrl + K` | OKBay full product (Mac alt) | same launcher when host steals Shift+K |
+| `Super + Shift + K` | OKBay full product (2x2) | fresh workspace + Atlas/Nautilus/Herdr/okstratr |
+| `Super + Ctrl + K` | OKBay full product (Mac alt) | same 2x2 launcher when host steals Shift+K |
+| `Super + Shift + S` | Screenshot (personal) | Keep via `hl.unbind` of Omarchy Maps; Maps → `Super + Shift + M` in `~/.config/hypr/bindings.lua` only |
 | `Super + Shift + Alt + K` | OKBay Reviews | `omarchy-shell shell summon benjsmith.okbay '{"surface":"panel"}'` |
 
 Keep the set small so Super+K stays scannable.
@@ -190,7 +191,7 @@ then engine.hover / focus + light camera ease
    **Confirmed by Ben (2026-09-11):** Ctrl+Arrow = compass; Alt+Arrow = anti-/clockwise walk. Do **not** use Super+Arrow (Hyprland).
 
 2. **`Super + Shift + K` for open Atlas / full product?**  
-   **Shipped:** `contrib/okbay-open-full-product.sh` (okstratr + Herdr + Atlas) + `okbay-open-atlas.sh`; `Super+Ctrl+K` Mac alt; `setup.sh` merges into `~/.config/hypr/bindings.lua`. Root cause when summon fails: missing `OMARCHY_PATH`.
+   **Shipped:** `contrib/okbay-open-full-product.sh` opens a **new Hyprland workspace** with a **4-panel 2x2** (Atlas/Nautilus/Herdr/okstratr) + `okbay-open-atlas.sh` (`OKBAY_ATLAS_TILED=1`); `Super+Ctrl+K` Mac alt; `setup.sh` merges into `~/.config/hypr/bindings.lua`. Live: `/home/benj/.local/bin/okbay-open-full-product.sh`. Root cause when summon fails: missing `OMARCHY_PATH`.
 
 3. **Arrows = spatial `nearestInDirection` (CE today) or true graph-neighbour BFS?**  
    React uses spatial. “Among neighbours” wording might mean edge-adjacent. Could do: arrows = spatial, Alt+arrows = ring of **graph** neighbours.

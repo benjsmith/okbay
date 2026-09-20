@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Hypr Super+Shift+K full product → Omarchy-like 2x2 workspace**: `contrib/okbay-open-full-product.sh` + `okbay-arrange-full-product.py` switch to next-empty (or `OKBAY_FULL_PRODUCT_WS` / `special:okbay`), ensure okstratr serve, launch Atlas TL + Nautilus TR + Herdr BL + okstratr BR — not Atlas float-fullscreen over the prior desktop. `OKBAY_ATLAS_TILED=1` skips Chromium `--start-fullscreen`. Docs note personal Super+Shift+S screenshot / Maps→Super+Shift+M (never edit `/usr/share` defaults). Live guest path: `/home/benj/.local/bin/okbay-open-full-product.sh`.
 - **okstratr harness registry thin client**: `okbay.okstratr_harness` + `GET/POST /api/okstratr/harness*` + `okbay harness list|enable|disable|set|reload` (`X-Okstratr-Host: okbay`); status `harness_registry` pointer; docs `HERDR-AND-REGISTRY.md`.
 - **Session auto-start (C1)**: on `okbay serve`, auto-start okstratr (`:8767`) + claim CE APIs (`:8766`); `okbay core-skills status|ensure` + `GET /api/core-skills/status`; QML mutex still blocks HTML atlas host.
 - **Path-native host_notify → Herdr**: `POST /api/okstratr/host-notify` + `okbay host-notify` map okstratr envelopes to `~/.local/state/okbay/herdr-notify.jsonl` + `herdr:` stderr (contract C2).
