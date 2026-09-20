@@ -41,9 +41,10 @@ o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
     hyprctl reload
 
   Chromium --app= + --class=OkbayAtlas (see okbay-open-atlas.sh). Solo Atlas
-  may use float/fullscreen rules; full-product Super+Shift+K launches with
-  OKBAY_ATLAS_TILED=1 and arranges a 2x2 grid on a fresh workspace — the
-  launcher unsets fullscreen so Atlas does not cover the prior desktop.
+  may optionally float (okbay-atlas.conf); do NOT force fullscreen via
+  windowrule — it fights Super+Shift+K full-product 2x2. Product launches with
+  OKBAY_ATLAS_TILED=1, clears Chromium fullscreen only, keeps float set, and
+  arranges floating quadrants (never float-unset into dwindle).
 
   Optional personal binds (user ~/.config/hypr/bindings.lua only):
     hl.unbind("SUPER + SHIFT + S")  -- keep screenshot; Maps unbound from Shift+S

@@ -194,3 +194,113 @@ def test_role_score_prefers_floating_on_target(arrange):
     }
     assert arrange.role_score(floating, target_ws) > arrange.role_score(tiled, target_ws)
     assert arrange.role_score(floating, target_ws) > arrange.role_score(other_ws, target_ws)
+
+
+def test_place_order_matches_live_recipe(arrange):
+    """Live Omarchy recipe rounds atlas → nautilus → herdr → okstratr."""
+    assert arrange.PLACE_ORDER == ("atlas", "nautilus", "herdr", "okstratr")
+    assert arrange.PLACE_ORDER == arrange.ROLES
+
+
+def test_float_and_settle_defaults(arrange):
+    assert arrange.FLOAT_SETTLE_SEC == 0.15
+    assert abs(arrange.SETTLE_SEC - 0.40) < 1e-9
+
+
+def test_never_float_unset_in_arrange_source():
+    """Regression: float-unset dumps panes into dwindle before absolute place."""
+    src = ARRANGE.read_text(encoding="utf-8")
+    # pin() may use action unset; float must never.
+    assert 'window.float({ action = "unset"' not in src
+    assert "window.float({{ action = \"unset\"" not in src
+    # Positive: float set is the only float action used
+    assert 'window.float({{ action = "set"' in src or "action = \"set\"" in src
+
+
+def test_unset_float_fullscreen_sets_float_not_unset(arrange, monkeypatch):
+    """unset_float_fullscreen must keep/set float (name is historical)."""
+    calls = []
+
+    def fake_dsp(lua):
+        calls.append(lua)
+        return "ok"
+
+    monkeypatch.setattr(arrange, "dsp", fake_dsp)
+    monkeypatch.setattr(arrange, "focus_window", lambda addr: None)
+    monkeypatch.setattr(arrange, "unset_fullscreen", lambda addr: True)
+    monkeypatch.setattr(arrange, "FLOAT_SETTLE_SEC", 0)  # no sleep in unit test
+    monkeypatch.setattr(arrange.time, "sleep", lambda s: None)
+    arrange.unset_float_fullscreen("0xABC")
+    joined = "\n".join(calls)
+    assert 'float({ action = "set"' in joined or 'float({{ action = "set"' in joined
+    assert 'float({ action = "unset"' not in joined
+    assert 'float({{ action = "unset"' not in joined
+
+
+def test_atlas_conf_has_no_fullscreen_rule():
+    conf = ROOT / "contrib" / "okbay-atlas.conf"
+    text = conf.read_text(encoding="utf-8")
+    active = [
+        ln.strip()
+        for ln in text.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    assert any(ln.startswith("windowrulev2 = float") for ln in active)
+    assert not any("fullscreen" in ln for ln in active)
+
+
+def test_open_full_product_never_float_unsets():
+    sh = ROOT / "contrib" / "okbay-open-full-product.sh"
+    text = sh.read_text(encoding="utf-8")
+    assert 'float({ action = "unset"' not in text
+    assert 'float({{ action = "unset"' not in text
+    # Still clears fullscreen via toggle string mode
+    assert 'mode = "fullscreen"' in text or 'mode = \\"fullscreen\\"' in text
+
+
+def test_close_tiled_nautilus_on_ws(arrange, monkeypatch):
+    clients = [
+        {
+            "address": "0xTILED",
+            "class": "org.gnome.Nautilus",
+            "title": "Home",
+            "floating": False,
+            "fullscreen": 0,
+            "workspace": {"id": 14, "name": "14"},
+            "size": [3440, 1400],
+            "at": [0, 24],
+        },
+        {
+            "address": "0xFLOAT",
+            "class": "org.gnome.Nautilus",
+            "title": "Home",
+            "floating": True,
+            "fullscreen": 0,
+            "workspace": {"id": 14, "name": "14"},
+            "size": [1720, 708],
+            "at": [1720, 24],
+        },
+        {
+            "address": "0xOTHER",
+            "class": "org.gnome.Nautilus",
+            "title": "Home",
+            "floating": False,
+            "fullscreen": 0,
+            "workspace": {"id": 2, "name": "2"},
+            "size": [800, 600],
+            "at": [0, 0],
+        },
+    ]
+    closed = []
+
+    monkeypatch.setattr(arrange, "clients", lambda: clients)
+    monkeypatch.setattr(arrange, "close_window", lambda addr: closed.append(addr))
+    monkeypatch.setattr(arrange.time, "sleep", lambda s: None)
+    n = arrange.close_tiled_nautilus_on_ws("14")
+    assert n == 1
+    assert closed == ["0xTILED"]
+    # keep_addr skips the chosen tiled pane (will be float-set next)
+    closed.clear()
+    n2 = arrange.close_tiled_nautilus_on_ws("14", keep_addr="0xTILED")
+    assert n2 == 0
+    assert closed == []

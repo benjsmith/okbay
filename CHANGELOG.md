@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Full-product 2x2 never float-unset (Omarchy 0.56 stick)**: live proof — float-unset when moving onto the WS dumps panes into dwindle (tall skinny tiled); recipe is close tiled Nautilus on target first, then float set → ~150ms → resize/move/move, two rounds atlas/nautilus/herdr/okstratr with ~400ms settle. Removed `windowrulev2 = fullscreen` from `okbay-atlas.conf` (fights product); open-full-product keeps float set after fs clear.
 - **Full-product 2x2 quadrant stick**: `role_needs_correct` now fails on position off by >~40px (not just size); `place_final` re-asserts float before resize/move, double-moves against Hypr float-center, pins via `hl.dsp.window.pin`; close extra Nautilus; prefer floating-on-target role pick; after correct passes settle + force-place all four from stored addresses. Never `fullscreen mode=0`.
 
 - **Full-product 2x2 arrange correct-after-done**: after `ARRANGE_DONE`, remeasure each role and re-place when width/height is off by >20% from TL/TR/BL/BR targets (`place_final` leaves floats set; never `fullscreen mode=0`). Herdr collapsed ~163px → re-float to half-pane (≥~800px); clear fs≥2 full-cover. Logs `MEASURE` / `CORRECT` / `CORRECT_OK`.

@@ -416,11 +416,11 @@ for c in clients:
     if not should:
         if on_target and fs_on:
             # Omarchy 0.56: mode=0 ENTERS fullscreen; toggle with mode="fullscreen"
+            # NEVER float-unset — dumps product panes into dwindle before arrange.
             dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
             dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
-            if c.get("floating"):
-                dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
-            print("unset fs/float on target Atlas", addr)
+            dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
+            print("unset fs keep float on target Atlas", addr)
         continue
     print("close stale Atlas", addr, "ws", ws_id, ws_name, "fs", fs)
     dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
@@ -538,10 +538,11 @@ for c in clients:
     except Exception:
         fs_on = bool(fs)
     dsp("hl.dsp.focus({ window = \"address:%s\" })" % addr)
-    # Omarchy 0.56: mode=0 ENTERS fs; only toggle OFF when already fullscreen
+    # Omarchy 0.56: mode=0 ENTERS fs; only toggle OFF when already fullscreen.
+    # NEVER float-unset — arrange needs float set for absolute 2x2 place.
     if fs_on:
         dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
-    dsp("hl.dsp.window.float({ action = \"unset\", window = \"address:%s\" })" % addr)
+    dsp("hl.dsp.window.float({ action = \"set\", window = \"address:%s\" })" % addr)
 ' 2>/dev/null || true
   fi
 }

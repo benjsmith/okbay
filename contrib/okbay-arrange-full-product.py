@@ -10,10 +10,15 @@ FloatingWindow okstratr (title Okstratr / class quickshell|qs).
 Hyprland 0.56 / Omarchy: mode=0 ENTERS fullscreen (fs→2);
 mode="fullscreen" toggles OFF when fs!=0. Never clear with mode=0.
 
-After ARRANGE_DONE: correct_after_arrange checks position (~40px) and size
-(~20%), re-floats if tiled, pins windowaddress, closes extra Nautilus, and
-force-places all four from stored addresses so Hypr float-center (~1718,378)
-cannot stick.
+LIVE PROVEN (Omarchy 0.56 Mac Mini): NEVER float-unset before/during arrange —
+float-unset when moving onto the WS dumps panes into dwindle columns (tall skinny
+tiled sizes); later place_final then races Hypr. Recipe that sticks quadrants:
+  1) Close ALL non-floating Nautilus on the target workspace first.
+  2) For each role: float set → sleep ~150ms → resize absolute → move absolute →
+     move absolute again (hl.dsp.window.*).
+  3) Two full rounds over atlas/nautilus/herdr/okstratr with ~400ms settle.
+After ARRANGE_DONE: correct_after_arrange still remeasures pos (~40px) / size
+(~20%), re-floats if tiled, pins, and force-places from stored addresses.
 
 Layout (monitor coords, top bar reserved):
   TL Atlas | TR Nautilus
@@ -40,10 +45,11 @@ HERDR_MIN_WIDTH = int(os.environ.get("OKBAY_HERDR_MIN_WIDTH") or "800")
 CORRECT_PASSES = int(os.environ.get("OKBAY_ARRANGE_CORRECT_PASSES") or "3")
 # Position tolerance after ARRANGE_DONE: re-place if x/y off by >40px (Hypr recenters floats).
 POS_TOLERANCE = int(os.environ.get("OKBAY_ARRANGE_POS_TOL") or "40")
-# Place / correct order: corners that stick less first, then stable BL last? Prefer
-# TL→TR→BR→BL so Herdr (often stable) is last and does not steal focus mid-grid.
-PLACE_ORDER = ("atlas", "nautilus", "okstratr", "herdr")
-SETTLE_SEC = float(os.environ.get("OKBAY_ARRANGE_SETTLE") or "0.45")
+# Live-proven round order: TL→TR→BL→BR (atlas/nautilus/herdr/okstratr).
+PLACE_ORDER = ("atlas", "nautilus", "herdr", "okstratr")
+SETTLE_SEC = float(os.environ.get("OKBAY_ARRANGE_SETTLE") or "0.40")
+# After float set, wait before resize/move so Hypr commits floating (Omarchy 0.56).
+FLOAT_SETTLE_SEC = float(os.environ.get("OKBAY_ARRANGE_FLOAT_SETTLE") or "0.15")
 
 
 def log(*parts):
@@ -319,18 +325,22 @@ def unset_fullscreen(addr: str) -> bool:
 
 
 def unset_float_fullscreen(addr):
-    """Disable fullscreen (toggle-off) and floating before re-placing."""
+    """Disable fullscreen only — NEVER float-unset (dumps into dwindle on Omarchy 0.56).
+
+    Kept name for callers; float is asserted SET so move_to_ws keeps floating geom.
+    """
     focus_window(addr)
     unset_fullscreen(addr)
-    dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
-    time.sleep(0.05)
+    # Critical: do not float-unset. Set float so later absolute place sticks.
+    dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
+    time.sleep(FLOAT_SETTLE_SEC)
 
 
 def kill_fullscreen_atlas_on_other_workspaces(target_ws):
     """Kill leftover fullscreen Atlas on *non-target* workspaces only.
 
-    Never close Atlas already on the target workspace — just unset
-    fullscreen/float so place() can tile it.
+    Never close Atlas already on the target workspace — clear fullscreen only
+    and ensure float stays set (never float-unset).
     """
     target = str(target_ws)
     killed = 0
@@ -346,9 +356,11 @@ def kill_fullscreen_atlas_on_other_workspaces(target_ws):
             continue
         fs = fs_value(c)
         if on_target:
-            if fs or c.get("floating"):
-                log("unset fs/float on target Atlas", addr, "fs", fs)
-                unset_float_fullscreen(addr)
+            # Only clear fullscreen; keep/ensure float (never float-unset).
+            if fs:
+                log("unset fs on target Atlas (keep float)", addr, "fs", fs)
+                unset_fullscreen(addr)
+            ensure_float_set(addr)
             continue
         # Non-target leftover — close so it cannot cover the prior desktop
         log(
@@ -380,16 +392,16 @@ def move_to_ws(addr, ws):
 
 
 def place(addr, x, y, w, h, name):
-    """Absolute float + resize + move for 2x2 geometry (prefer over tiling)."""
+    """Live recipe: float set → ~150ms → resize abs → move abs → move abs again."""
     log(f"place {name} {addr} -> {x},{y} {w}x{h}")
     focus_window(addr)
     # Ensure not fullscreen before resize/move (mode=0 ENTERS fs — never use it)
     if not unset_fullscreen(addr):
         log("place WARN still fullscreen before resize", name, addr)
 
-    # Exact pixel grid needs floating
+    # Exact pixel grid needs floating — NEVER float-unset before/during place.
     dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
-    time.sleep(0.05)
+    time.sleep(FLOAT_SETTLE_SEC)
 
     def do_resize_move():
         out_r = dsp(
@@ -408,11 +420,11 @@ def place(addr, x, y, w, h, name):
         )
         return out_r, f"{out_m} {out_m2}"
 
-    # If tiled mid-place, re-float before geom
+    # If still tiled after settle, re-float then wait again before geom
     c0 = client_by_addr(addr)
     if not (c0 and c0.get("floating")):
         dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
-        time.sleep(0.05)
+        time.sleep(FLOAT_SETTLE_SEC)
 
     out_r, out_m = do_resize_move()
     blob = f"{out_r} {out_m}".lower()
@@ -420,7 +432,7 @@ def place(addr, x, y, w, h, name):
         log("place resize blocked by fullscreen; toggle+retry", name, addr)
         unset_fullscreen(addr)
         dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
-        time.sleep(0.05)
+        time.sleep(FLOAT_SETTLE_SEC)
         do_resize_move()
 
     # Re-assert after windowrules may re-fire (toggle off only if still on)
@@ -546,13 +558,13 @@ def ensure_floating_geom(addr: str, name: str) -> bool:
         return True
     log("re-float before geom", name, addr, "was_float", (c or {}).get("floating"))
     ensure_float_set(addr)
-    time.sleep(0.08)
+    time.sleep(FLOAT_SETTLE_SEC)
     c2 = client_by_addr(addr)
     if not (c2 and c2.get("floating")):
         # Focus then float again — address-only set sometimes no-ops when tiled
         focus_window(addr)
         ensure_float_set(addr)
-        time.sleep(0.08)
+        time.sleep(FLOAT_SETTLE_SEC)
         c2 = client_by_addr(addr)
     return bool(c2 and c2.get("floating"))
 
@@ -584,7 +596,7 @@ def place_final(addr, x, y, w, h, name, do_pin: bool = True):
     if not ensure_floating_geom(addr, name):
         focus_window(addr)
         ensure_float_set(addr)
-        time.sleep(0.08)
+        time.sleep(FLOAT_SETTLE_SEC)
     _resize_move(addr, x, y, w, h)
     # Windowrules may re-fullscreen or retile mid-move
     c = client_by_addr(addr)
@@ -687,6 +699,34 @@ def select_roles(target_ws: str, timeout: float = 14.0):
             return chosen
         time.sleep(0.25)
     return best
+
+
+def close_tiled_nautilus_on_ws(target_ws: str, keep_addr: str | None = None):
+    """Close ALL non-floating Nautilus on target WS (live-proven step 1).
+
+    Tiled Nautilus on the product workspace dumps peers into dwindle columns.
+    Optionally keep one address (chosen TR pane) — it will be float-set next.
+    """
+    closed = 0
+    for c in clients():
+        if classify(c) != "nautilus":
+            continue
+        if c.get("floating"):
+            continue
+        addr = c.get("address")
+        if not addr or (keep_addr and addr == keep_addr):
+            continue
+        ws = c.get("workspace") or {}
+        ws_id = str(ws.get("id") or "")
+        ws_name = str(ws.get("name") or "")
+        on_target = ws_id == str(target_ws) or ws_name == str(target_ws)
+        if not on_target:
+            continue
+        log("close tiled nautilus on target", addr, "ws", ws_id, ws_name)
+        close_window(addr)
+        closed += 1
+        time.sleep(0.08)
+    return closed
 
 
 def close_extra_windows(chosen: dict, target_ws: str):
@@ -876,6 +916,12 @@ def main():
     if os.environ.get("OKBAY_KILL_STALE_ATLAS", "1") == "1":
         kill_fullscreen_atlas_on_other_workspaces(WS)
 
+    # Step 1 (live-proven): close ALL non-floating Nautilus on target WS first
+    tiled_n = close_tiled_nautilus_on_ws(WS)
+    if tiled_n:
+        log("closed_tiled_nautilus_pre", tiled_n)
+        time.sleep(0.15)
+
     wait_s = float(os.environ.get("OKBAY_ARRANGE_WAIT") or "22")
     roles = select_roles(WS, timeout=wait_s)
     if len(roles) < len(ROLES):
@@ -896,9 +942,13 @@ def main():
             log("MISSING_ROLES", missing)
 
     # Drop duplicate Nautilus / extra Atlas before move — tiled extras retile floats
+    keep_nau = (roles.get("nautilus") or {}).get("address")
+    tiled_n2 = close_tiled_nautilus_on_ws(WS, keep_addr=keep_nau)
+    if tiled_n2:
+        log("closed_tiled_nautilus_pre_move", tiled_n2)
     closed = close_extra_windows(roles, WS)
     log("closed_extras", closed)
-    if closed:
+    if closed or tiled_n2:
         time.sleep(0.15)
         # Re-bind chosen after closes
         roles = select_roles(WS, timeout=3.0) or roles

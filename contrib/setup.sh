@@ -78,7 +78,7 @@ BINDEOF
     echo "==> $BINDINGS_LUA already references okbay-open-full-product.sh"
   fi
 fi
-# OkbayAtlas Hyprland windowrules (float/fullscreen); does not touch keybinds.
+# OkbayAtlas Hyprland windowrules (optional float; no fullscreen — fights product 2x2).
 if [ -f "$REPO_ROOT/contrib/okbay-atlas.conf" ]; then
   if [ -x "$REPO_ROOT/contrib/install-okbay-atlas-rules.sh" ]; then
     "$REPO_ROOT/contrib/install-okbay-atlas-rules.sh" || true
