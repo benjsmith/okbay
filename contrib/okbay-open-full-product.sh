@@ -417,7 +417,7 @@ for c in clients:
         if on_target and fs_on:
             # Omarchy 0.56: mode=0 ENTERS fullscreen; toggle with mode="fullscreen"
             dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
-            dsp('hl.dsp.window.fullscreen({ mode = "fullscreen" })')
+            dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
             if c.get("floating"):
                 dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
             print("unset fs/float on target Atlas", addr)
@@ -425,7 +425,7 @@ for c in clients:
     print("close stale Atlas", addr, "ws", ws_id, ws_name, "fs", fs)
     dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
     if fs_on:
-        dsp('hl.dsp.window.fullscreen({ mode = "fullscreen" })')
+        dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
     dsp(f'hl.dsp.window.close({{ window = "address:{addr}" }})')
     killed += 1
     time.sleep(0.1)
@@ -540,7 +540,7 @@ for c in clients:
     dsp("hl.dsp.focus({ window = \"address:%s\" })" % addr)
     # Omarchy 0.56: mode=0 ENTERS fs; only toggle OFF when already fullscreen
     if fs_on:
-        dsp('hl.dsp.window.fullscreen({ mode = "fullscreen" })')
+        dsp("hl.dsp.window.fullscreen({ mode = \"fullscreen\" })")
     dsp("hl.dsp.window.float({ action = \"unset\", window = \"address:%s\" })" % addr)
 ' 2>/dev/null || true
   fi
