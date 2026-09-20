@@ -60,7 +60,8 @@ if [ -f "$REPO_ROOT/contrib/hypr-bindings.lua" ]; then
   elif ! grep -q 'okbay-open-atlas.sh' "$BINDINGS_LUA" 2>/dev/null; then
     cat >> "$BINDINGS_LUA" <<'BINDEOF'
 
--- OKBay Atlas (setup.sh); Omarchy Super+Shift+O remains Obsidian unless Okstratr overrides it.
+-- OKBay Atlas (setup.sh); replace the chord rather than accumulating duplicate binds.
+hl.unbind("SUPER + SHIFT + K")
 o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
   launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh",
 })
@@ -90,5 +91,5 @@ fi
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now okbayd.service 2>/dev/null || echo "(systemd user unit not enabled)"
 echo "Okbay setup complete. Atlas: http://127.0.0.1:8766/atlas"
-echo "Hypr: Super+Shift+K → OKBay Atlas (helper sets OMARCHY_PATH). Super+Shift+O is Obsidian by default."
+echo "Hypr: Super+Shift+K → OKBay Atlas (unbinds before bind; helper sets OMARCHY_PATH). Super+Shift+O belongs to Okstratr when installed."
 echo "Hypr windowrules: ~/.config/hypr/okbay-atlas.conf — after install: hyprctl reload"

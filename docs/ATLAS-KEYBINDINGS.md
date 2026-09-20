@@ -33,6 +33,8 @@ So Atlas actions do **not** “nest under Super+K” as a prefix menu. The Omarc
 - **User config:** `~/.config/hypr/bindings.lua` — add, or `hl.unbind` then rebind. Flags: `omarchy_default_bindings`, `omarchy_preinstalled_bindings` in `hyprland.lua`.
 - **Inspect:** `omarchy-menu-keybindings --print` (or Super+K UI).
 
+When replacing a bind, call `hl.unbind` for the chord before `o.bind`; otherwise Omarchy's original and the replacement can both fire. On Try Omarchy the Mac `⌘` key is Hyprland's `Super`: Okstratr's `Super+Shift+O` override must launch with `OMARCHY_PATH=/usr/share/omarchy`, while OKBay replaces `Super+Shift+K` with Atlas.
+
 ### 1.3 Okbay today (no Atlas key chords yet)
 
 | Surface | Path | Key / discovery behaviour |
