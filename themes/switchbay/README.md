@@ -1,6 +1,7 @@
 # Okbay / Switchbay theme for Omarchy
 
 - `colors.toml` — Switchbay chrome + CE doc-type palette
+- `foot.ini` — Foot terminal colors (from `colors.toml` + Omarchy `foot.ini.tpl`); ship so Omarchy theme include works without waiting on `omarchy-theme-set`
 - `backgrounds/1-okbay-night.png` — **primary** wallpaper: ultrawide **3440×1440** (v21)
   - **Photographic** wet-night plate (Milky Way sky + wet asphalt) full-frame
   - Plate upscaled with OpenCV **EDSR×2** (tiled) to 3840×2160, cached, then height-fit + mirror side pads (fallback: ESPCN / Lanczos+unsharp)
@@ -30,4 +31,19 @@ omarchy theme set switchbay
 omarchy-theme-bg-set ~/.config/omarchy/themes/switchbay/backgrounds/1-okbay-night.png
 # or explicit ultrawide:
 # omarchy-theme-bg-set ~/.config/omarchy/themes/switchbay/backgrounds/okbay-wallpaper-ultrawide-3440x1440.png
+```
+
+## Regenerate foot.ini
+
+Omarchy normally renders `default/themed/foot.ini.tpl` when you `omarchy theme set switchbay`.
+This repo ships a pre-resolved `foot.ini` so Foot’s theme include works even before a theme refresh.
+
+```sh
+# On an Omarchy guest with OMARCHY_PATH set:
+tpl="$OMARCHY_PATH/default/themed/foot.ini.tpl"
+# Resolve aliases (purple←magenta, selection_foreground←bright_foreground, …)
+# then strip # from hex values into the template placeholders — or copy the
+# checked-in foot.ini after editing colors.toml.
+omarchy-theme-set switchbay   # regenerates ~/.local/state/omarchy/current/theme/foot.ini
+cp ~/.local/state/omarchy/current/theme/foot.ini themes/switchbay/foot.ini
 ```

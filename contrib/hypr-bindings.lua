@@ -1,18 +1,23 @@
--- OKBay Atlas / Reviews — optional Omarchy Hyprland binds (Super+K discoverable).
+-- OKBay full-product / Atlas — optional Omarchy Hyprland binds.
 -- Install: merge into ~/.config/hypr/bindings.lua (loaded after Omarchy defaults).
--- setup.sh copies contrib/okbay-open-atlas.sh next to the plugin and documents the bind.
+-- setup.sh installs contrib/okbay-open-full-product.sh (+ atlas helper) and documents binds.
 -- In-page Atlas nav (/, arrows, Ctrl+Arrow, Alt+Arrow, WASD, l, t, …) lives in
 -- atlas-chrome.js — Super+Arrow is owned by Hyprland tiling and must not be rebound.
 --
 -- Note: Omarchy default Super+Shift+O is Obsidian (preinstalled); Okstratr owns
--- that override and unbinds it first. OKBay Atlas uses Super+Shift+K.
+-- that override (okstratr-only panel). OKBay full-product uses Super+Shift+K.
+-- On Mac host key steal of Super+Shift+K, use Super+Ctrl+K (same launcher).
 
--- Open / focus Atlas (single Chromium focus-or-launch; no plugin summon).
--- Requires OMARCHY_PATH; the helper exports it when missing (SSH / non-Hypr envs).
--- Summon raced Chromium and opened two windows — keep Super+Shift+K Chromium-only.
+-- Full product: okstratr summon + best-effort Herdr desk + Atlas opener.
 hl.unbind("SUPER + SHIFT + K")
-o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
-  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh",
+o.bind("SUPER + SHIFT + K", "OKBay full product", {
+  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
+})
+
+-- Mac-host alt when Super+Shift+K is stolen by the host (replaces Omarchy Herdr cheat sheet).
+hl.unbind("SUPER + CTRL + K")
+o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
+  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
 })
 
 -- Optional: Reviews panel (also available as Super+Ctrl+1 when Okbay is bar panel #1).
@@ -34,6 +39,6 @@ o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
     windowrulev2 = float, class:^(OkbayAtlas)$
     windowrulev2 = fullscreen, class:^(OkbayAtlas)$
 
-  Launcher already focus-or-launches one window — do not also summon the
-  Quickshell surface on Super+Shift+K (double-window race).
+  Full-product launcher summons okstratr then focus-or-launches one Atlas
+  Chromium — do not also summon the Quickshell atlas surface on K (double-window).
 ]]

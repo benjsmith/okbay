@@ -42,33 +42,40 @@ for f in manifest.json BarWidget.qml Overlay.qml Panel.qml Service.qml Model.js 
   [ -f "$REPO_ROOT/$f" ] && cp "$REPO_ROOT/$f" "$HOME/.config/omarchy/plugins/benjsmith.okbay/$f"
 done
 [ -f "$REPO_ROOT/contrib/okbay-menu.jsonc" ] && cp "$REPO_ROOT/contrib/okbay-menu.jsonc" "$HOME/.config/omarchy/extensions/okbay-menu.jsonc"
-# Atlas opener + Hypr bind snippet (Super+Shift+K). Omarchy default Super+Shift+O is Obsidian.
-mkdir -p "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib"
-if [ -f "$REPO_ROOT/contrib/okbay-open-atlas.sh" ]; then
-  install -m 0755 "$REPO_ROOT/contrib/okbay-open-atlas.sh"     "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh"
-  # Also keep a copy next to a src checkout if present
-  if [ -d "$HOME/src/okbay/contrib" ]; then
-    install -m 0755 "$REPO_ROOT/contrib/okbay-open-atlas.sh" "$HOME/src/okbay/contrib/okbay-open-atlas.sh"
+# Full-product + Atlas openers + Hypr binds (Super+Shift+K / Super+Ctrl+K Mac alt).
+# Omarchy default Super+Shift+O is Obsidian — Okstratr owns that override (panel only).
+mkdir -p "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib" "$BIN"
+for opener in okbay-open-atlas.sh okbay-open-full-product.sh; do
+  if [ -f "$REPO_ROOT/contrib/$opener" ]; then
+    install -m 0755 "$REPO_ROOT/contrib/$opener"       "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/$opener"
+    install -m 0755 "$REPO_ROOT/contrib/$opener" "$BIN/$opener"
+    if [ -d "$HOME/src/okbay/contrib" ]; then
+      install -m 0755 "$REPO_ROOT/contrib/$opener" "$HOME/src/okbay/contrib/$opener"
+    fi
   fi
-fi
+done
 BINDINGS_LUA="$HOME/.config/hypr/bindings.lua"
 if [ -f "$REPO_ROOT/contrib/hypr-bindings.lua" ]; then
   mkdir -p "$HOME/.config/hypr"
   if [ ! -f "$BINDINGS_LUA" ]; then
     cp "$REPO_ROOT/contrib/hypr-bindings.lua" "$BINDINGS_LUA"
-    echo "==> installed $BINDINGS_LUA (Super+Shift+K → OKBay Atlas)"
-  elif ! grep -q 'okbay-open-atlas.sh' "$BINDINGS_LUA" 2>/dev/null; then
+    echo "==> installed $BINDINGS_LUA (Super+Shift+K → OKBay full product)"
+  elif ! grep -q 'okbay-open-full-product.sh' "$BINDINGS_LUA" 2>/dev/null; then
     cat >> "$BINDINGS_LUA" <<'BINDEOF'
 
--- OKBay Atlas (setup.sh); replace the chord rather than accumulating duplicate binds.
+-- OKBay full product (setup.sh); replace chords rather than accumulating duplicate binds.
 hl.unbind("SUPER + SHIFT + K")
-o.bind("SUPER + SHIFT + K", "OKBay Atlas", {
-  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-atlas.sh",
+o.bind("SUPER + SHIFT + K", "OKBay full product", {
+  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
+})
+hl.unbind("SUPER + CTRL + K")
+o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
+  launch = "~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh",
 })
 BINDEOF
-    echo "==> merged Super+Shift+K Atlas bind into $BINDINGS_LUA"
+    echo "==> merged Super+Shift+K / Super+Ctrl+K full-product binds into $BINDINGS_LUA"
   else
-    echo "==> $BINDINGS_LUA already references okbay-open-atlas.sh"
+    echo "==> $BINDINGS_LUA already references okbay-open-full-product.sh"
   fi
 fi
 # OkbayAtlas Hyprland windowrules (float/fullscreen); does not touch keybinds.
@@ -91,5 +98,5 @@ fi
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now okbayd.service 2>/dev/null || echo "(systemd user unit not enabled)"
 echo "Okbay setup complete. Atlas: http://127.0.0.1:8766/atlas"
-echo "Hypr: Super+Shift+K → OKBay Atlas (unbinds before bind; helper sets OMARCHY_PATH). Super+Shift+O belongs to Okstratr when installed."
+echo "Hypr: Super+Shift+K → OKBay full product (okstratr + Herdr + Atlas). Super+Ctrl+K = Mac-host alt. Super+Shift+O = Okstratr only."
 echo "Hypr windowrules: ~/.config/hypr/okbay-atlas.conf — after install: hyprctl reload"
