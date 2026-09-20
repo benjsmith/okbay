@@ -28,7 +28,7 @@ test -f "$TARGET"
 if command -v omarchy-theme-bg-set >/dev/null 2>&1; then
   omarchy-theme-bg-set "$TARGET"
 else
-  omarchy theme set switchbay 2>/dev/null || omarchy-theme-set switchbay 2>/dev/null || true
+  omarchy theme set switchbay 2>/dev/null || omarchy theme set switchbay 2>/dev/null || true
   omarchy-theme-bg-set "$TARGET" 2>/dev/null || true
 fi
 
