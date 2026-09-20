@@ -28,6 +28,11 @@ LOG = os.environ.get("OKBAY_FULL_PRODUCT_LOG") or "/tmp/okbay-full-product.log"
 ROLES = ("atlas", "nautilus", "herdr", "okstratr")
 # Omarchy top bar ~26–40px; prefer monitor.reserved[1] when present.
 DEFAULT_TOP_BAR = int(os.environ.get("OKBAY_TOP_BAR") or "32")
+# Remeasure tolerance after ARRANGE_DONE: re-place if w/h off by >20%.
+SIZE_TOLERANCE = float(os.environ.get("OKBAY_ARRANGE_SIZE_TOL") or "0.20")
+# Live Omarchy: Herdr often collapses to ~163px; require ~half-pane (≥800 on typical).
+HERDR_MIN_WIDTH = int(os.environ.get("OKBAY_HERDR_MIN_WIDTH") or "800")
+CORRECT_PASSES = int(os.environ.get("OKBAY_ARRANGE_CORRECT_PASSES") or "3")
 
 
 def log(*parts):
@@ -427,6 +432,135 @@ def layout_rects(m):
     }, {"W": W, "H": H, "bar": bar, "mx": mx, "my": my}
 
 
+def client_size(c):
+    """Return (w, h) from hyprctl client size, or (0, 0)."""
+    size = (c or {}).get("size") or [0, 0]
+    try:
+        return int(size[0] or 0), int(size[1] or 0)
+    except Exception:
+        return 0, 0
+
+
+def size_off_target(actual_w, actual_h, target_w, target_h, tol=None):
+    """True when width or height differs from target by more than tol (default 20%)."""
+    if tol is None:
+        tol = SIZE_TOLERANCE
+    if target_w <= 0 or target_h <= 0:
+        return True
+    return (
+        abs(actual_w - target_w) / float(target_w) > tol
+        or abs(actual_h - target_h) / float(target_h) > tol
+    )
+
+
+def role_needs_correct(role, c, target, mon_meta=None):
+    """Decide whether role geometry (or Herdr min-width / full-cover fs) needs re-place."""
+    if not c:
+        return True, "missing"
+    _x, _y, w, h = target
+    aw, ah = client_size(c)
+    fs = fs_value(c)
+    if fs != 0:
+        # fs≥2 full-cover is the Omarchy overlay failure mode — always correct.
+        mw = int((mon_meta or {}).get("W") or 0)
+        mh = int((mon_meta or {}).get("H") or 0)
+        if mw and mh and aw >= int(mw * 0.9) and ah >= int(mh * 0.9):
+            return True, f"fs_full_cover fs={fs} {aw}x{ah}"
+        return True, f"fs={fs} {aw}x{ah}"
+    if size_off_target(aw, ah, w, h):
+        return True, f"size {aw}x{ah} vs {w}x{h}"
+    # Herdr must stay a usable BL half (≥~800 when target is that wide)
+    if role == "herdr":
+        min_w = min(HERDR_MIN_WIDTH, w) if w > 0 else HERDR_MIN_WIDTH
+        if aw < min_w * 0.95:
+            return True, f"herdr_narrow {aw}x{ah} min_w={min_w}"
+    if not c.get("floating"):
+        # Final 2x2 is float-based; tiled windows fight Hypr and collapse.
+        return True, f"not_floating {aw}x{ah}"
+    return False, f"ok {aw}x{ah}"
+
+
+def ensure_float_set(addr: str):
+    """Leave floating ON (final pass must not unset float)."""
+    dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
+
+
+def place_final(addr, x, y, w, h, name):
+    """Re-place for correction: toggle fs OFF if needed, SET float, resize/move; leave float on."""
+    log(f"place_final {name} {addr} -> {x},{y} {w}x{h}")
+    focus_window(addr)
+    unset_fullscreen(addr)
+    ensure_float_set(addr)
+    time.sleep(0.05)
+    dsp(
+        f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
+        f'window = "address:{addr}" }})'
+    )
+    dsp(
+        f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+        f'window = "address:{addr}" }})'
+    )
+    # Windowrules may re-fullscreen; toggle off only — never unset float on final pass
+    if fs_value(client_by_addr(addr)) != 0:
+        unset_fullscreen(addr)
+        ensure_float_set(addr)
+        time.sleep(0.05)
+        dsp(
+            f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+        dsp(
+            f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+    ensure_float_set(addr)
+
+
+def correct_after_arrange(roles, layout, meta):
+    """After ARRANGE_DONE: remeasure; re-place any role off by >20% (or Herdr <~800).
+
+    Leaves floats set. Clears fs full-cover. Up to CORRECT_PASSES rounds.
+    """
+    for i in range(max(1, CORRECT_PASSES)):
+        roles = wait_roles(timeout=2.5) or roles
+        bad = []
+        for role, rect in layout.items():
+            c = roles.get(role)
+            needs, why = role_needs_correct(role, c, rect, meta)
+            log("MEASURE", role, why, "float", (c or {}).get("floating"), "fs", fs_value(c))
+            if needs and c and c.get("address"):
+                bad.append((role, c, rect, why))
+            elif needs:
+                log("CORRECT skip missing", role, why)
+        if not bad:
+            log("CORRECT_OK pass", i)
+            return roles
+        for role, c, rect, why in bad:
+            x, y, w, h = rect
+            log("CORRECT", role, why, "->", f"{w}x{h}")
+            place_final(c["address"], x, y, w, h, f"{role}_correct{i}")
+        time.sleep(0.35)
+    # Last measure for GEO / exit status
+    roles = wait_roles(timeout=2.0) or roles
+    still = []
+    for role, rect in layout.items():
+        c = roles.get(role)
+        needs, why = role_needs_correct(role, c, rect, meta)
+        if needs:
+            still.append((role, why))
+            # One last final place attempt
+            if c and c.get("address"):
+                x, y, w, h = rect
+                place_final(c["address"], x, y, w, h, f"{role}_correct_last")
+                ensure_float_set(c["address"])
+                unset_fullscreen(c["address"])
+    if still:
+        log("CORRECT_STILL_OFF", still)
+    else:
+        log("CORRECT_OK pass", "last")
+    return wait_roles(timeout=1.5) or roles
+
+
 def dump_geo(tag="GEO"):
     for c in clients():
         ws = c.get("workspace") or {}
@@ -507,9 +641,24 @@ def main():
         focus_window(addr)
 
     log("ARRANGE_DONE")
+    # Hypr fights floats: Herdr often collapses (~163px); Atlas TL not stable.
+    # Remeasure and re-place any role whose w/h is off by >20%; leave floats set.
+    roles = correct_after_arrange(roles, layout, meta)
     dump_geo("GEO")
-    # Exit non-zero if still missing so the shell log notices
+    # Fail if roles missing or Herdr still absurdly narrow / any fs full-cover
+    fail = False
     if any(r not in roles for r in ROLES):
+        log("MISSING_ROLES_FINAL", [r for r in ROLES if r not in roles])
+        fail = True
+    for role, rect in layout.items():
+        c = roles.get(role)
+        needs, why = role_needs_correct(role, c, rect, meta)
+        if needs:
+            log("FINAL_OFF", role, why)
+            # Still exit 0 for transient Hypr races unless missing/full-cover/herdr collapsed
+            if role == "herdr" or (c and fs_value(c) != 0):
+                fail = True
+    if fail:
         sys.exit(2)
 
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Full-product 2x2 arrange correct-after-done**: after `ARRANGE_DONE`, remeasure each role and re-place when width/height is off by >20% from TL/TR/BL/BR targets (`place_final` leaves floats set; never `fullscreen mode=0`). Herdr collapsed ~163px → re-float to half-pane (≥~800px); clear fs≥2 full-cover. Logs `MEASURE` / `CORRECT` / `CORRECT_OK`.
+
 - **Full-product 2x2 live fix (ToS / Herdr app-id / okstratr)**: Atlas dedicated profile now seeds `First Run` + Local State/Preferences (`require_eula: false`) and launches with `--no-first-run`; wait past Additional Terms title; fallback to default Chromium profile if still stuck. Classify empty-class windows titled Terms of Service / Atlas / 8766 / 127.0.0.1. Prefer `foot --app-id=herdr -T Herdr` before `omarchy-launch-terminal-herdr`. okstratr panel summon retries until FloatingWindow titled Okstratr maps. Longer arrange wait (22s).
 
 - **Full-product 2x2 Omarchy harden**: classify Atlas as `chrome-*atlas*` (Chromium ignores `--class=OkbayAtlas` on Wayland); keep `--class=OkbayAtlas` + dedicated Chromium profile; Herdr via `omarchy-launch-terminal-herdr` / `uwsm-app` / `foot --app-id=herdr`; okstratr panel summon retry; force `okbay viewer set html` + `mkdir ~/.local/state/okbay` before serve; never block on foreground `okbay setup` (background `&`); prefer `PYTHONPATH=~/src/okbay/src python3 -m okbay serve`; dedupe arrange log (stdout+file double-write).
