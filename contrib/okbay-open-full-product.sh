@@ -50,6 +50,21 @@ if [[ -z "${WAYLAND_DISPLAY:-}" || -z "${XDG_RUNTIME_DIR:-}" ]]; then
   fi
 fi
 
+# Omarchy / SSH: hyprctl needs XDG_RUNTIME_DIR + HYPRLAND_INSTANCE_SIGNATURE.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  if [[ -d "${XDG_RUNTIME_DIR}/hypr" ]]; then
+    for _sig in "${XDG_RUNTIME_DIR}/hypr"/*; do
+      [[ -d "$_sig" ]] || continue
+      export HYPRLAND_INSTANCE_SIGNATURE="$(basename "$_sig")"
+      break
+    done
+  fi
+fi
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  log "HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE"
+fi
+
 # BioCure freeze tip 5b9711895 (not hybrid 76142912). Guest + host well-known paths.
 BIOCURE_NAME="biocure-confirm-v1-query-5b9711895"
 resolve_biocure_workspace() {
@@ -303,6 +318,9 @@ import json, os, subprocess, time
 def run(args):
     return subprocess.run(args, capture_output=True, text=True)
 
+def dsp(lua):
+    return run(["hyprctl", "dispatch", lua])
+
 try:
     clients = json.loads(subprocess.check_output(["hyprctl", "clients", "-j"], text=True))
 except Exception as e:
@@ -343,34 +361,26 @@ for c in clients:
         fs_on = bool(int(fs))
     except Exception:
         fs_on = bool(fs)
-    # Kill Atlas that is fullscreen on previous workspace, or any Atlas not on target
-    # that is still fullscreen/float-covering.
+    addr = c.get("address")
+    if not addr:
+        continue
     should = False
     if prev and (ws_id == prev or ws_name == prev) and (fs_on or c.get("floating")):
         should = True
     if not on_target and fs_on:
         should = True
     if not should:
-        # Also clear fullscreen on target leftovers so arrange can tile
         if on_target and fs_on:
-            addr = c.get("address")
-            if addr:
-                run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"])
-                run(["hyprctl", "dispatch", "fullscreen", "0"])
-                run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
-                # togglefloating off if floating
-                if c.get("floating"):
-                    run(["hyprctl", "dispatch", f"togglefloating address:{addr}"])
-                print("unset fs/float on target Atlas", addr)
-        continue
-    addr = c.get("address")
-    if not addr:
+            dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
+            dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+            if c.get("floating"):
+                dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
+            print("unset fs/float on target Atlas", addr)
         continue
     print("close stale Atlas", addr, "ws", ws_id, ws_name, "fs", fs)
-    run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"])
-    run(["hyprctl", "dispatch", "fullscreen", "0"])
-    run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
-    run(["hyprctl", "dispatch", f"closewindow address:{addr}"])
+    dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
+    dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+    dsp(f'hl.dsp.window.close({{ window = "address:{addr}" }})')
     killed += 1
     time.sleep(0.1)
 print("stale_atlas_killed", killed)
@@ -409,8 +419,9 @@ print(9)
 switch_workspace() {
   local ws="$1"
   command -v hyprctl >/dev/null 2>&1 || return 0
-  hyprctl dispatch workspace "$ws" >/dev/null 2>&1 || true
-  log "switched to workspace $ws"
+  # Omarchy Hyprland 0.56: Lua dispatcher (classic `workspace N` → ')' expected)
+  hyprctl dispatch 'hl.dsp.focus({ workspace = "'"$ws"'" })' >/dev/null 2>&1 || true
+  log "switched to workspace $ws (hl.dsp.focus)"
 }
 
 launch_atlas_tiled() {
@@ -451,7 +462,7 @@ launch_atlas_tiled() {
       log "atlas cmdline retry: ${cmd:-none}"
     fi
   fi
-  # Hypr: drop fullscreen even if windowrules re-applied
+  # Hypr: drop fullscreen even if windowrules re-applied (Lua hl.dsp.*)
   if command -v hyprctl >/dev/null 2>&1; then
     hyprctl clients -j 2>/dev/null | python3 -c '
 import json,subprocess,sys
@@ -459,6 +470,8 @@ try:
     clients=json.load(sys.stdin)
 except Exception:
     raise SystemExit(0)
+def dsp(lua):
+    subprocess.run(["hyprctl","dispatch",lua],capture_output=True)
 for c in clients:
     blob=" ".join(str(x) for x in [
         c.get("class"), c.get("initialClass"), c.get("title"), c.get("initialTitle")
@@ -468,9 +481,9 @@ for c in clients:
     addr=c.get("address") or ""
     if not addr:
         continue
-    subprocess.run(["hyprctl","dispatch","focuswindow",f"address:{addr}"],capture_output=True)
-    subprocess.run(["hyprctl","dispatch","fullscreen","0"],capture_output=True)
-    subprocess.run(["hyprctl","dispatch","fullscreenstate","0","0"],capture_output=True)
+    dsp("hl.dsp.focus({ window = \"address:%s\" })" % addr)
+    dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+    dsp("hl.dsp.window.float({ action = \"unset\", window = \"address:%s\" })" % addr)
 ' 2>/dev/null || true
   fi
 }

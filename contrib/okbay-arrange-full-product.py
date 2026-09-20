@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Place Atlas/Nautilus/Herdr/okstratr into a 2x2 grid on WS_TARGET.
 
-Hardened for Hyprland OkbayAtlas windowrules (float+fullscreen) and Quickshell
+Hardened for Omarchy Hyprland 0.56 Lua dispatchers (hl.dsp.*) — classic
+`hyprctl dispatch workspace N` fails with: error: ')' expected.
+
+Also hardened for OkbayAtlas windowrules (float+fullscreen) and Quickshell
 FloatingWindow okstratr (title Okstratr / class quickshell|qs).
 
 Layout (monitor coords, top bar reserved):
@@ -15,6 +18,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 WS = os.environ.get("WS_TARGET") or "2"
 LOG = os.environ.get("OKBAY_FULL_PRODUCT_LOG") or "/tmp/okbay-full-product.log"
@@ -33,14 +37,35 @@ def log(*parts):
         pass
 
 
+def ensure_hypr_env():
+    """Export XDG_RUNTIME_DIR + HYPRLAND_INSTANCE_SIGNATURE for SSH/script cases."""
+    if not os.environ.get("XDG_RUNTIME_DIR"):
+        try:
+            uid = os.getuid()
+        except Exception:
+            uid = 1000
+        os.environ["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return
+    hypr = Path(os.environ["XDG_RUNTIME_DIR"]) / "hypr"
+    try:
+        sigs = sorted(p.name for p in hypr.iterdir() if p.is_dir())
+    except OSError:
+        sigs = []
+    if sigs:
+        os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = sigs[0]
+        log("HYPRLAND_INSTANCE_SIGNATURE", sigs[0])
+
+
 def run(args):
     r = subprocess.run(args, capture_output=True, text=True)
     return (r.stdout or "") + (r.stderr or "")
 
 
-def dsp(arg):
-    out = run(["hyprctl", "dispatch", arg]).strip()
-    log("DSP", arg[:120], "->", out[:120])
+def dsp(lua: str):
+    """Dispatch an Omarchy Lua hl.dsp.* expression (never bare classic forms)."""
+    out = run(["hyprctl", "dispatch", lua]).strip()
+    log("DSP", lua[:160], "->", out[:120])
     return out
 
 
@@ -171,6 +196,19 @@ def is_atlas_client(c):
     return classify(c) == "atlas"
 
 
+def focus_window(addr: str):
+    dsp(f'hl.dsp.focus({{ window = "address:{addr}" }})')
+
+
+def focus_workspace(ws):
+    dsp(f'hl.dsp.focus({{ workspace = "{ws}" }})')
+
+
+def close_window(addr: str):
+    focus_window(addr)
+    dsp(f'hl.dsp.window.close({{ window = "address:{addr}" }})')
+
+
 def kill_fullscreen_atlas_on_other_workspaces(target_ws):
     """Kill leftover fullscreen Atlas on *non-target* workspaces only.
 
@@ -211,10 +249,9 @@ def kill_fullscreen_atlas_on_other_workspaces(target_ws):
             "float",
             c.get("floating"),
         )
-        run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"])
-        run(["hyprctl", "dispatch", "fullscreen", "0"])
-        run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
-        dsp(f"closewindow address:{addr}")
+        focus_window(addr)
+        dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+        close_window(addr)
         killed += 1
         time.sleep(0.1)
     return killed
@@ -222,42 +259,41 @@ def kill_fullscreen_atlas_on_other_workspaces(target_ws):
 
 def unset_float_fullscreen(addr):
     """Disable fullscreen and floating before re-placing (windowrule recovery)."""
-    run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"])
-    # fullscreen 0 = off
-    run(["hyprctl", "dispatch", "fullscreen", "0", f"address:{addr}"])
-    run(["hyprctl", "dispatch", "fullscreen", "0"])
-    run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
-    # Force tiled (floating off). Hyprland: setfloating 0 / settiled
-    out = run(["hyprctl", "dispatch", f"setfloating 0,address:{addr}"]).strip()
-    if "unknown" in out.lower() or "invalid" in out.lower() or not out:
-        # Fallback: togglefloating only if currently floating
-        for c in clients():
-            if c.get("address") == addr and c.get("floating"):
-                dsp(f"togglefloating address:{addr}")
-                break
-    else:
-        log("setfloating 0", addr, "->", out[:80])
+    focus_window(addr)
+    # Live-proven: mode = 0 (not "off" / action unset)
+    dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
+    dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+    dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
     time.sleep(0.05)
 
 
 def move_to_ws(addr, ws):
-    # Prefer explicit movetoworkspace (not silent) so focus/map follows
-    dsp(f"movetoworkspace {ws},address:{addr}")
-    # Also silent variant as belt-and-suspenders on some Hypr builds
-    run(["hyprctl", "dispatch", f"movetoworkspacesilent {ws},address:{addr}"])
+    # Absolute move-to-workspace via Lua (classic movetoworkspace fails on Omarchy 0.56)
+    dsp(f'hl.dsp.window.move({{ workspace = "{ws}", window = "address:{addr}" }})')
+    # Belt: focus then move without window key
+    focus_window(addr)
+    dsp(f'hl.dsp.window.move({{ workspace = "{ws}" }})')
 
 
 def place(addr, x, y, w, h, name):
+    """Absolute float + resize + move for 2x2 geometry (prefer over tiling)."""
     log(f"place {name} {addr} -> {x},{y} {w}x{h}")
-    unset_float_fullscreen(addr)
+    focus_window(addr)
+    dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
+    dsp("hl.dsp.window.fullscreen({ mode = 0 })")
     # Exact pixel grid needs floating
-    dsp(f"setfloating address:{addr}")
+    dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
     time.sleep(0.05)
-    dsp(f"resizewindowpixel exact {w} {h},address:{addr}")
-    dsp(f"movewindowpixel exact {x} {y},address:{addr}")
+    dsp(
+        f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
+        f'window = "address:{addr}" }})'
+    )
+    dsp(
+        f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+        f'window = "address:{addr}" }})'
+    )
     # Re-assert after windowrules may re-fire
-    run(["hyprctl", "dispatch", "fullscreen", "0", f"address:{addr}"])
-    run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
+    dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
 
 
 def top_bar_px(m):
@@ -310,6 +346,8 @@ def dump_geo(tag="GEO"):
 
 
 def main():
+    ensure_hypr_env()
+
     # Optional: kill leftover fullscreen Atlas outside target before wait
     if os.environ.get("OKBAY_KILL_STALE_ATLAS", "1") == "1":
         kill_fullscreen_atlas_on_other_workspaces(WS)
@@ -335,8 +373,8 @@ def main():
             move_to_ws(addr, WS)
 
     time.sleep(0.25)
-    # Ensure target workspace focused
-    dsp(f"workspace {WS}")
+    # Ensure target workspace focused (Lua — never bare workspace N)
+    focus_workspace(WS)
     roles = wait_roles(timeout=4.0)
     m = mon()
     layout, meta = layout_rects(m)
@@ -359,13 +397,21 @@ def main():
 
     atlas = roles.get("atlas")
     if atlas and atlas.get("address"):
-        # Final anti-fullscreen assert on Atlas
-        unset_float_fullscreen(atlas["address"])
-        dsp(f"setfloating address:{atlas['address']}")
+        # Final anti-fullscreen assert on Atlas + re-place TL
+        addr = atlas["address"]
+        focus_window(addr)
+        dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
+        dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
         x, y, w, h = layout["atlas"]
-        dsp(f"resizewindowpixel exact {w} {h},address:{atlas['address']}")
-        dsp(f"movewindowpixel exact {x} {y},address:{atlas['address']}")
-        dsp(f"focuswindow address:{atlas['address']}")
+        dsp(
+            f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+        dsp(
+            f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+        focus_window(addr)
 
     log("ARRANGE_DONE")
     dump_geo("GEO")
