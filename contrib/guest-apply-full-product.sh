@@ -42,13 +42,13 @@ o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
 BINDEOF
 fi
 
-if ! grep -q 'SUPER + SHIFT + M' "$BINDINGS_LUA" 2>/dev/null; then
+if ! grep -q 'SUPER + ALT + S' "$BINDINGS_LUA" 2>/dev/null; then
   cat >> "$BINDINGS_LUA" <<'NOTEOF'
 
--- Personal (Mac Mini): keep Super+Shift+S as screenshot; Maps on Super+Shift+M.
--- Uncomment if Omarchy default still binds Maps to Super+Shift+S:
+-- Personal (Mac Mini): keep Super+Shift+S as screenshot; Maps on Super+Alt+S
+-- (NOT Super+Shift+M — that is Omarchy Music). Uncomment if needed:
 -- hl.unbind("SUPER + SHIFT + S")
--- o.bind("SUPER + SHIFT + M", "Maps", { launch = "omarchy-launch-webapp https://maps.google.com" })
+-- o.bind("SUPER + ALT + S", "Maps", { launch = "omarchy-launch-webapp https://maps.google.com" })
 NOTEOF
 fi
 

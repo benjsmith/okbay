@@ -9,8 +9,8 @@
 -- On Mac host key steal of Super+Shift+K, use Super+Ctrl+K (same launcher).
 --
 -- Personal chord note (do NOT edit /usr/share/omarchy defaults): live Mac Mini
--- guest already moves Omarchy Maps off Super+Shift+S via personal unbind so
--- Super+Shift+S stays screenshot; Maps lives on Super+Shift+M. Mirror that in
+-- guest unbinds Omarchy Maps from Super+Shift+S so Super+Shift+S stays screenshot.
+-- Maps → Super+Alt+S (NOT Super+Shift+M — that is Omarchy Music). Mirror in
 -- ~/.config/hypr/bindings.lua only — never patch /usr/share/omarchy/default/….
 
 -- Full product: new/empty Hyprland workspace + 2x2 panes
@@ -46,6 +46,6 @@ o.bind("SUPER + CTRL + K", "OKBay full product (Mac alt)", {
   launcher unsets fullscreen so Atlas does not cover the prior desktop.
 
   Optional personal binds (user ~/.config/hypr/bindings.lua only):
-    hl.unbind("SUPER + SHIFT + S")  -- keep screenshot; Maps → Super+Shift+M
-    o.bind("SUPER + SHIFT + M", "Maps", { … })
+    hl.unbind("SUPER + SHIFT + S")  -- keep screenshot; Maps unbound from Shift+S
+    o.bind("SUPER + ALT + S", "Maps", { … })  -- NOT Super+Shift+M (Music)
 ]]

@@ -613,7 +613,11 @@
               if (String(doc.workspaces[k]) === cur) name = k;
             });
           }
-          if (chip) chip.textContent = name || 'workspace';
+          if (chip) {
+            var label = name || 'workspace';
+            chip.textContent = label;
+            chip.title = label;
+          }
           document.documentElement.dataset.workspace = name || '';
         }).catch(function () {});
     },
@@ -621,7 +625,7 @@
       var list = document.getElementById('workspace-list');
       var self = this;
       if (!list) return;
-      list.innerHTML = '<div class="sidebar-empty">Loading…</div>';
+      list.innerHTML = '<div class="sidebar-empty is-loading">Loading<span class="loading-ellipsis" aria-hidden="true"></span></div>';
       fetch(this.api + '/api/workspace/list')
         .then(function (r) { return r.json(); })
         .then(function (doc) {

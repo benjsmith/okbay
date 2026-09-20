@@ -1,9 +1,21 @@
 # Atlas keybindings for Okbay on Omarchy
 
-**Date:** 2026-09-13 (Europe/Zurich)  
+**Date:** 2026-09-20 (Europe/Zurich)  
 **Status:** In-page set **implemented** (+ chrome parity 2026-09-13: ingest, workspace, edges, viewer, minimap, help).  
 **Scope:** Match Omarchy’s binding + Super+K discovery pattern; Atlas chords that work under Chromium `--app=` kiosk.
-**Hypr:** optional `contrib/hypr-bindings.lua` (`Super+Shift+K` → full-product **2x2 workspace**; `Super+Ctrl+K` Mac alt; `Super+Shift+O` = Okstratr only) — merge into `~/.config/hypr/bindings.lua` when ready. Personal note: keep **Super+Shift+S** = screenshot (unbind Maps); Maps → **Super+Shift+M** — never edit `/usr/share/omarchy` defaults.
+**Hypr:** optional `contrib/hypr-bindings.lua` (`Super+Shift+K` → full-product **2x2 workspace**; `Super+Ctrl+K` Mac alt; `Super+Shift+O` = Okstratr only) — merge into `~/.config/hypr/bindings.lua` when ready. Personal note: keep **Super+Shift+S** = screenshot (unbind Maps); Maps → **Super+Alt+S** (NOT **Super+Shift+M**, which is Music) — never edit `/usr/share/omarchy` defaults.
+
+---
+
+## 0. Current Hypr truth (2026-09-20, live Mac Mini guest)
+
+| Chord | Action |
+|-------|--------|
+| **Super+Shift+K** | OKBay **full-product 2x2** (Atlas TL · Nautilus TR · Herdr BL · okstratr BR) |
+| **Super+Ctrl+K** | Same full-product launcher (**Mac-host alt** when Shift+K is stolen) |
+| **Super+Shift+O** | **Okstratr only** (not full product) |
+| **Super+Shift+S** | **Screenshot** (Maps unbound from this chord) |
+| **Super+Alt+S** | **Maps** (personal; do not use Super+Shift+M — that is **Music**) |
 
 ---
 
@@ -130,7 +142,7 @@ Registering Hypr binds with good `description` strings **is** how they “show u
 |-------|-------------|----------------|
 | `Super + Shift + K` | OKBay full product (2x2) | fresh workspace + Atlas/Nautilus/Herdr/okstratr |
 | `Super + Ctrl + K` | OKBay full product (Mac alt) | same 2x2 launcher when host steals Shift+K |
-| `Super + Shift + S` | Screenshot (personal) | Keep via `hl.unbind` of Omarchy Maps; Maps → `Super + Shift + M` in `~/.config/hypr/bindings.lua` only |
+| `Super + Shift + S` | Screenshot (personal) | Keep via `hl.unbind` of Omarchy Maps; Maps → `Super + Alt + S` in `~/.config/hypr/bindings.lua` only (**not** `Super+Shift+M` = Music) |
 | `Super + Shift + Alt + K` | OKBay Reviews | `omarchy-shell shell summon benjsmith.okbay '{"surface":"panel"}'` |
 
 Keep the set small so Super+K stays scannable.
