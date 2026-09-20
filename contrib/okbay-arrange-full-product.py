@@ -10,6 +10,11 @@ FloatingWindow okstratr (title Okstratr / class quickshell|qs).
 Hyprland 0.56 / Omarchy: mode=0 ENTERS fullscreen (fs→2);
 mode="fullscreen" toggles OFF when fs!=0. Never clear with mode=0.
 
+After ARRANGE_DONE: correct_after_arrange checks position (~40px) and size
+(~20%), re-floats if tiled, pins windowaddress, closes extra Nautilus, and
+force-places all four from stored addresses so Hypr float-center (~1718,378)
+cannot stick.
+
 Layout (monitor coords, top bar reserved):
   TL Atlas | TR Nautilus
   BL Herdr | BR okstratr
@@ -33,6 +38,12 @@ SIZE_TOLERANCE = float(os.environ.get("OKBAY_ARRANGE_SIZE_TOL") or "0.20")
 # Live Omarchy: Herdr often collapses to ~163px; require ~half-pane (≥800 on typical).
 HERDR_MIN_WIDTH = int(os.environ.get("OKBAY_HERDR_MIN_WIDTH") or "800")
 CORRECT_PASSES = int(os.environ.get("OKBAY_ARRANGE_CORRECT_PASSES") or "3")
+# Position tolerance after ARRANGE_DONE: re-place if x/y off by >40px (Hypr recenters floats).
+POS_TOLERANCE = int(os.environ.get("OKBAY_ARRANGE_POS_TOL") or "40")
+# Place / correct order: corners that stick less first, then stable BL last? Prefer
+# TL→TR→BR→BL so Herdr (often stable) is last and does not steal focus mid-grid.
+PLACE_ORDER = ("atlas", "nautilus", "okstratr", "herdr")
+SETTLE_SEC = float(os.environ.get("OKBAY_ARRANGE_SETTLE") or "0.45")
 
 
 def log(*parts):
@@ -389,7 +400,19 @@ def place(addr, x, y, w, h, name):
             f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
             f'window = "address:{addr}" }})'
         )
-        return out_r, out_m
+        # Second absolute move fights Omarchy float-center (y≈378 on 1440)
+        time.sleep(0.04)
+        out_m2 = dsp(
+            f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+        return out_r, f"{out_m} {out_m2}"
+
+    # If tiled mid-place, re-float before geom
+    c0 = client_by_addr(addr)
+    if not (c0 and c0.get("floating")):
+        dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
+        time.sleep(0.05)
 
     out_r, out_m = do_resize_move()
     blob = f"{out_r} {out_m}".lower()
@@ -402,6 +425,8 @@ def place(addr, x, y, w, h, name):
 
     # Re-assert after windowrules may re-fire (toggle off only if still on)
     unset_fullscreen(addr)
+    # Leave floating ON for 2x2 (do not unset)
+    dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
 
 
 def top_bar_px(m):
@@ -441,6 +466,22 @@ def client_size(c):
         return 0, 0
 
 
+def client_at(c):
+    """Return (x, y) from hyprctl client at, or (0, 0)."""
+    at = (c or {}).get("at") or [0, 0]
+    try:
+        return int(at[0] or 0), int(at[1] or 0)
+    except Exception:
+        return 0, 0
+
+
+def pos_off_target(actual_x, actual_y, target_x, target_y, tol=None):
+    """True when x or y differs from target by more than tol px (default 40)."""
+    if tol is None:
+        tol = POS_TOLERANCE
+    return abs(actual_x - target_x) > tol or abs(actual_y - target_y) > tol
+
+
 def size_off_target(actual_w, actual_h, target_w, target_h, tol=None):
     """True when width or height differs from target by more than tol (default 20%)."""
     if tol is None:
@@ -454,11 +495,12 @@ def size_off_target(actual_w, actual_h, target_w, target_h, tol=None):
 
 
 def role_needs_correct(role, c, target, mon_meta=None):
-    """Decide whether role geometry (or Herdr min-width / full-cover fs) needs re-place."""
+    """Decide whether role geometry needs re-place (pos, size, float, fs, Herdr width)."""
     if not c:
         return True, "missing"
-    _x, _y, w, h = target
+    tx, ty, w, h = target
     aw, ah = client_size(c)
+    ax, ay = client_at(c)
     fs = fs_value(c)
     if fs != 0:
         # fs≥2 full-cover is the Omarchy overlay failure mode — always correct.
@@ -467,6 +509,11 @@ def role_needs_correct(role, c, target, mon_meta=None):
         if mw and mh and aw >= int(mw * 0.9) and ah >= int(mh * 0.9):
             return True, f"fs_full_cover fs={fs} {aw}x{ah}"
         return True, f"fs={fs} {aw}x{ah}"
+    if not c.get("floating"):
+        # Final 2x2 is float-based; tiled windows fight Hypr and collapse / recenter.
+        return True, f"not_floating at={ax},{ay} {aw}x{ah}"
+    if pos_off_target(ax, ay, tx, ty):
+        return True, f"pos {ax},{ay} vs {tx},{ty}"
     if size_off_target(aw, ah, w, h):
         return True, f"size {aw}x{ah} vs {w}x{h}"
     # Herdr must stay a usable BL half (≥~800 when target is that wide)
@@ -474,10 +521,7 @@ def role_needs_correct(role, c, target, mon_meta=None):
         min_w = min(HERDR_MIN_WIDTH, w) if w > 0 else HERDR_MIN_WIDTH
         if aw < min_w * 0.95:
             return True, f"herdr_narrow {aw}x{ah} min_w={min_w}"
-    if not c.get("floating"):
-        # Final 2x2 is float-based; tiled windows fight Hypr and collapse.
-        return True, f"not_floating {aw}x{ah}"
-    return False, f"ok {aw}x{ah}"
+    return False, f"ok at={ax},{ay} {aw}x{ah}"
 
 
 def ensure_float_set(addr: str):
@@ -485,13 +529,35 @@ def ensure_float_set(addr: str):
     dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
 
 
-def place_final(addr, x, y, w, h, name):
-    """Re-place for correction: toggle fs OFF if needed, SET float, resize/move; leave float on."""
-    log(f"place_final {name} {addr} -> {x},{y} {w}x{h}")
-    focus_window(addr)
-    unset_fullscreen(addr)
+def pin_window(addr: str, on: bool = True):
+    """Pin floating window so Hypr tiling/recenter cannot steal it (Omarchy Lua)."""
+    action = "set" if on else "unset"
+    out = dsp(f'hl.dsp.window.pin({{ action = "{action}", window = "address:{addr}" }})')
+    blob = (out or "").lower()
+    if "error" in blob or "expected" in blob or "unknown" in blob:
+        # Toggle form / no action key (some Omarchy builds)
+        dsp(f'hl.dsp.window.pin({{ window = "address:{addr}" }})')
+
+
+def ensure_floating_geom(addr: str, name: str) -> bool:
+    """Re-set float if Hypr tiled us; return True when floating after assert."""
+    c = client_by_addr(addr)
+    if c and c.get("floating"):
+        return True
+    log("re-float before geom", name, addr, "was_float", (c or {}).get("floating"))
     ensure_float_set(addr)
-    time.sleep(0.05)
+    time.sleep(0.08)
+    c2 = client_by_addr(addr)
+    if not (c2 and c2.get("floating")):
+        # Focus then float again — address-only set sometimes no-ops when tiled
+        focus_window(addr)
+        ensure_float_set(addr)
+        time.sleep(0.08)
+        c2 = client_by_addr(addr)
+    return bool(c2 and c2.get("floating"))
+
+
+def _resize_move(addr, x, y, w, h):
     dsp(
         f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
         f'window = "address:{addr}" }})'
@@ -500,65 +566,286 @@ def place_final(addr, x, y, w, h, name):
         f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
         f'window = "address:{addr}" }})'
     )
-    # Windowrules may re-fullscreen; toggle off only — never unset float on final pass
+    # Second move sticks against Hypr float-center (~(W-w)/2+bar → y≈378 on 1440)
+    time.sleep(0.04)
+    dsp(
+        f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+        f'window = "address:{addr}" }})'
+    )
+
+
+def place_final(addr, x, y, w, h, name, do_pin: bool = True):
+    """Re-place for correction: fs OFF, float SET (+remeasure), resize/move, optional pin."""
+    log(f"place_final {name} {addr} -> {x},{y} {w}x{h}")
+    # Prefer address-scoped ops; focus only when fs must toggle
     if fs_value(client_by_addr(addr)) != 0:
+        focus_window(addr)
         unset_fullscreen(addr)
+    if not ensure_floating_geom(addr, name):
+        focus_window(addr)
         ensure_float_set(addr)
-        time.sleep(0.05)
-        dsp(
-            f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
-            f'window = "address:{addr}" }})'
-        )
-        dsp(
-            f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
-            f'window = "address:{addr}" }})'
-        )
+        time.sleep(0.08)
+    _resize_move(addr, x, y, w, h)
+    # Windowrules may re-fullscreen or retile mid-move
+    c = client_by_addr(addr)
+    if fs_value(c) != 0 or not (c and c.get("floating")):
+        log("place_final retry after fs/tile fight", name, addr)
+        if fs_value(c) != 0:
+            focus_window(addr)
+            unset_fullscreen(addr)
+        ensure_floating_geom(addr, name)
+        _resize_move(addr, x, y, w, h)
     ensure_float_set(addr)
+    if do_pin:
+        pin_window(addr, True)
+    # Remeasure: if still not floating or pos/size way off, one more geom pass
+    time.sleep(0.06)
+    c = client_by_addr(addr)
+    if c:
+        aw, ah = client_size(c)
+        ax, ay = client_at(c)
+        if (not c.get("floating")) or pos_off_target(ax, ay, x, y) or size_off_target(aw, ah, w, h):
+            log(
+                "place_final post-check still off",
+                name,
+                f"at={ax},{ay}",
+                f"{aw}x{ah}",
+                "float",
+                c.get("floating"),
+            )
+            ensure_floating_geom(addr, name)
+            _resize_move(addr, x, y, w, h)
+            ensure_float_set(addr)
+            if do_pin:
+                pin_window(addr, True)
 
 
-def correct_after_arrange(roles, layout, meta):
-    """After ARRANGE_DONE: remeasure; re-place any role off by >20% (or Herdr <~800).
+def temp_float_rules_for_addrs(addrs):
+    """Optional temporary float force via windowrulev2 on exact addresses during arrange."""
+    if os.environ.get("OKBAY_ARRANGE_TEMP_RULES", "1") != "1":
+        return
+    for addr in addrs:
+        if not addr:
+            continue
+        # keyword appends; address-scoped so we do not blanket-class float forever
+        run(["hyprctl", "keyword", "windowrulev2", f"float,address:{addr}"])
+        log("TEMP_RULE float", addr)
 
-    Leaves floats set. Clears fs full-cover. Up to CORRECT_PASSES rounds.
+
+def role_score(c, target_ws: str, prefer_float: bool = True):
+    """Higher is better when choosing among duplicate role clients (extra Nautilus)."""
+    ws = c.get("workspace") or {}
+    ws_id = str(ws.get("id") or "")
+    ws_name = str(ws.get("name") or "")
+    on_target = 1 if (ws_id == str(target_ws) or ws_name == str(target_ws)) else 0
+    floating = 1 if c.get("floating") else 0
+    if not prefer_float:
+        floating = 0
+    size = c.get("size") or [0, 0]
+    try:
+        area = int(size[0] or 0) * int(size[1] or 0)
+    except Exception:
+        area = 0
+    # Prefer not fullscreen
+    fs_ok = 1 if fs_value(c) == 0 else 0
+    return (on_target, floating, fs_ok, area, -(c.get("focusHistoryID") or 0))
+
+
+def collect_role_candidates():
+    """Map role -> list of matching clients (okstratr_maybe folded into okstratr)."""
+    found = {r: [] for r in ROLES}
+    maybes = []
+    for c in clients():
+        role = classify(c)
+        if role == "okstratr_maybe":
+            maybes.append(c)
+            continue
+        if role in found:
+            found[role].append(c)
+    if maybes and not found["okstratr"]:
+        found["okstratr"] = maybes
+    elif maybes:
+        found["okstratr"].extend(maybes)
+    return found
+
+
+def select_roles(target_ws: str, timeout: float = 14.0):
+    """Wait until all roles seen; pick best candidate per role (target WS + floating)."""
+    deadline = time.time() + timeout
+    best = {}
+    while time.time() < deadline:
+        cands = collect_role_candidates()
+        chosen = {}
+        for role in ROLES:
+            lst = cands.get(role) or []
+            if not lst:
+                continue
+            lst.sort(key=lambda c: role_score(c, target_ws), reverse=True)
+            chosen[role] = lst[0]
+        best = chosen
+        if all(k in chosen for k in ROLES):
+            return chosen
+        time.sleep(0.25)
+    return best
+
+
+def close_extra_windows(chosen: dict, target_ws: str):
+    """Close duplicate Nautilus (and non-chosen Atlas) fighting the float 2x2 on target WS.
+
+    Never close the four chosen addresses. Extra tiled Nautilus full-width was
+    live-proven to retile Atlas/okstratr off their quadrants.
     """
+    keep = {c.get("address") for c in chosen.values() if c and c.get("address")}
+    closed = 0
+    for c in clients():
+        addr = c.get("address")
+        if not addr or addr in keep:
+            continue
+        role = classify(c)
+        if role == "okstratr_maybe":
+            role = "okstratr"
+        ws = c.get("workspace") or {}
+        ws_id = str(ws.get("id") or "")
+        ws_name = str(ws.get("name") or "")
+        on_target = ws_id == str(target_ws) or ws_name == str(target_ws)
+        # Always drop extra Nautilus (any WS) — duplicates fight tiling
+        if role == "nautilus":
+            log("close extra nautilus", addr, "ws", ws_id, ws_name, "float", c.get("floating"))
+            close_window(addr)
+            closed += 1
+            time.sleep(0.08)
+            continue
+        # Extra Atlas on target WS only (leftover on other WS handled elsewhere)
+        if role == "atlas" and on_target:
+            log("close extra atlas on target", addr)
+            if fs_value(c):
+                unset_fullscreen(addr)
+            close_window(addr)
+            closed += 1
+            time.sleep(0.08)
+    return closed
+
+
+def force_place_all(addrs: dict, layout: dict, tag: str):
+    """Force-place all four roles from stored addresses (ignore reclassify races)."""
+    for role in PLACE_ORDER:
+        addr = addrs.get(role)
+        rect = layout.get(role)
+        if not addr or not rect:
+            log("force_place skip", role, tag)
+            continue
+        x, y, w, h = rect
+        place_final(addr, x, y, w, h, f"{role}_{tag}", do_pin=True)
+        time.sleep(0.05)
+
+
+def roles_from_addrs(addrs: dict):
+    """Rebuild roles dict from stored addresses (stable across Hypr retile)."""
+    out = {}
+    for role, addr in addrs.items():
+        c = client_by_addr(addr)
+        if c:
+            out[role] = c
+    return out
+
+
+def correct_after_arrange(roles, layout, meta, addrs=None):
+    """After ARRANGE_DONE: remeasure pos+size; re-place; settle; force-place all four.
+
+    Leaves floats set + pinned. Clears fs full-cover. Up to CORRECT_PASSES rounds
+    then one settle force-place from stored addresses.
+    """
+    if addrs is None:
+        addrs = {r: (roles.get(r) or {}).get("address") for r in ROLES}
+        addrs = {r: a for r, a in addrs.items() if a}
+
     for i in range(max(1, CORRECT_PASSES)):
-        roles = wait_roles(timeout=2.5) or roles
+        # Prefer address-stable clients over reclassify (extra Nautilus races)
+        fresh = roles_from_addrs(addrs)
+        if len(fresh) < len(addrs):
+            # Fill any missing via select
+            selected = select_roles(WS, timeout=2.0)
+            for role, c in selected.items():
+                if role not in fresh and c.get("address"):
+                    fresh[role] = c
+                    addrs[role] = c["address"]
+        roles = fresh or roles
         bad = []
-        for role, rect in layout.items():
+        for role in PLACE_ORDER:
+            rect = layout.get(role)
+            if not rect:
+                continue
             c = roles.get(role)
             needs, why = role_needs_correct(role, c, rect, meta)
-            log("MEASURE", role, why, "float", (c or {}).get("floating"), "fs", fs_value(c))
+            ax, ay = client_at(c)
+            log(
+                "MEASURE",
+                role,
+                why,
+                "at",
+                f"{ax},{ay}",
+                "float",
+                (c or {}).get("floating"),
+                "fs",
+                fs_value(c),
+            )
             if needs and c and c.get("address"):
                 bad.append((role, c, rect, why))
+                addrs[role] = c["address"]
             elif needs:
                 log("CORRECT skip missing", role, why)
         if not bad:
             log("CORRECT_OK pass", i)
-            return roles
+            break
         for role, c, rect, why in bad:
             x, y, w, h = rect
-            log("CORRECT", role, why, "->", f"{w}x{h}")
+            log("CORRECT", role, why, "->", f"{x},{y} {w}x{h}")
             place_final(c["address"], x, y, w, h, f"{role}_correct{i}")
-        time.sleep(0.35)
-    # Last measure for GEO / exit status
-    roles = wait_roles(timeout=2.0) or roles
+        time.sleep(SETTLE_SEC)
+
+    # Settle then force-place ALL four from stored addresses (sticks quadrants)
+    log("CORRECT_SETTLE force-place all", list(addrs.keys()))
+    time.sleep(SETTLE_SEC)
+    force_place_all(addrs, layout, "settle")
+    time.sleep(SETTLE_SEC)
+    force_place_all(addrs, layout, "settle2")
+    time.sleep(0.25)
+
+    roles = roles_from_addrs(addrs) or select_roles(WS, timeout=1.5) or roles
     still = []
-    for role, rect in layout.items():
+    for role in PLACE_ORDER:
+        rect = layout.get(role)
+        if not rect:
+            continue
         c = roles.get(role)
         needs, why = role_needs_correct(role, c, rect, meta)
         if needs:
             still.append((role, why))
-            # One last final place attempt
-            if c and c.get("address"):
+            addr = (c or {}).get("address") or addrs.get(role)
+            if addr:
                 x, y, w, h = rect
-                place_final(c["address"], x, y, w, h, f"{role}_correct_last")
-                ensure_float_set(c["address"])
-                unset_fullscreen(c["address"])
+                place_final(addr, x, y, w, h, f"{role}_correct_last")
+                ensure_float_set(addr)
+                if fs_value(client_by_addr(addr)) != 0:
+                    unset_fullscreen(addr)
     if still:
-        log("CORRECT_STILL_OFF", still)
+        # One more micro-settle measure
+        time.sleep(0.2)
+        roles = roles_from_addrs(addrs) or roles
+        still2 = []
+        for role in PLACE_ORDER:
+            rect = layout.get(role)
+            c = roles.get(role)
+            needs, why = role_needs_correct(role, c, rect, meta)
+            if needs:
+                still2.append((role, why))
+        if still2:
+            log("CORRECT_STILL_OFF", still2)
+        else:
+            log("CORRECT_OK pass", "last")
     else:
         log("CORRECT_OK pass", "last")
-    return wait_roles(timeout=1.5) or roles
+    return roles_from_addrs(addrs) or select_roles(WS, timeout=1.0) or roles
 
 
 def dump_geo(tag="GEO"):
@@ -589,7 +876,13 @@ def main():
     if os.environ.get("OKBAY_KILL_STALE_ATLAS", "1") == "1":
         kill_fullscreen_atlas_on_other_workspaces(WS)
 
-    roles = wait_roles(timeout=float(os.environ.get("OKBAY_ARRANGE_WAIT") or "22"))
+    wait_s = float(os.environ.get("OKBAY_ARRANGE_WAIT") or "22")
+    roles = select_roles(WS, timeout=wait_s)
+    if len(roles) < len(ROLES):
+        # Fallback to legacy wait_roles classify
+        legacy = wait_roles(timeout=2.0)
+        for k, v in legacy.items():
+            roles.setdefault(k, v)
     log(
         "roles",
         {k: (v.get("address"), (v.get("title") or "")[:40], class_str(v)) for k, v in roles.items()},
@@ -597,66 +890,104 @@ def main():
     missing = [r for r in ROLES if r not in roles]
     if missing:
         log("waiting still missing", missing)
-        # One more wait slice
-        roles = wait_roles(timeout=6.0)
+        roles = select_roles(WS, timeout=6.0) or roles
         missing = [r for r in ROLES if r not in roles]
         if missing:
             log("MISSING_ROLES", missing)
 
-    for _role, c in list(roles.items()):
-        addr = c.get("address")
+    # Drop duplicate Nautilus / extra Atlas before move — tiled extras retile floats
+    closed = close_extra_windows(roles, WS)
+    log("closed_extras", closed)
+    if closed:
+        time.sleep(0.15)
+        # Re-bind chosen after closes
+        roles = select_roles(WS, timeout=3.0) or roles
+
+    addrs = {}
+    for role in ROLES:
+        c = roles.get(role)
+        addr = (c or {}).get("address")
         if addr:
-            unset_float_fullscreen(addr)
+            addrs[role] = addr
+            # Initial: clear fs; do NOT leave tiled — set float early so move keeps float
+            focus_window(addr)
+            unset_fullscreen(addr)
+            ensure_float_set(addr)
             move_to_ws(addr, WS)
 
     time.sleep(0.25)
     # Ensure target workspace focused (Lua — never bare workspace N)
     focus_workspace(WS)
-    roles = wait_roles(timeout=4.0)
+    # Close extras again after move (Nautilus sometimes remaps on WS switch)
+    roles = roles_from_addrs(addrs) or select_roles(WS, timeout=4.0) or roles
+    for role, c in list(roles.items()):
+        if c.get("address"):
+            addrs[role] = c["address"]
+    closed2 = close_extra_windows(roles, WS)
+    if closed2:
+        log("closed_extras_after_move", closed2)
+        time.sleep(0.1)
+        roles = roles_from_addrs(addrs) or select_roles(WS, timeout=2.0) or roles
+
     m = mon()
     layout, meta = layout_rects(m)
     log("monitor", meta, "reserved", m.get("reserved"))
 
-    for role, (x, y, w, h) in layout.items():
+    temp_float_rules_for_addrs(list(addrs.values()))
+
+    # First place pass — PLACE_ORDER avoids focus stealing into tile mid-grid
+    for role in PLACE_ORDER:
+        rect = layout.get(role)
         c = roles.get(role)
-        if not c or not c.get("address"):
+        if not rect or not c or not c.get("address"):
             log("missing", role)
             continue
+        x, y, w, h = rect
         place(c["address"], x, y, w, h, role)
+        ensure_float_set(c["address"])
+        pin_window(c["address"], True)
 
-    time.sleep(0.4)
-    roles = wait_roles(timeout=3.0)
-    for role, (x, y, w, h) in layout.items():
+    time.sleep(SETTLE_SEC)
+    roles = roles_from_addrs(addrs) or select_roles(WS, timeout=3.0) or roles
+    for role in PLACE_ORDER:
+        rect = layout.get(role)
         c = roles.get(role)
-        if not c or not c.get("address"):
+        if not rect or not c or not c.get("address"):
             continue
+        x, y, w, h = rect
+        addrs[role] = c["address"]
         place(c["address"], x, y, w, h, role + "2")
+        ensure_float_set(c["address"])
+        pin_window(c["address"], True)
 
-    atlas = roles.get("atlas")
-    if atlas and atlas.get("address"):
-        # Final anti-fullscreen assert on Atlas + re-place TL
-        addr = atlas["address"]
+    atlas_addr = addrs.get("atlas")
+    if atlas_addr and "atlas" in layout:
+        # Final anti-fullscreen assert on Atlas + re-place TL via place_final
         x, y, w, h = layout["atlas"]
-        place(addr, x, y, w, h, "atlas_final")
-        focus_window(addr)
+        place_final(atlas_addr, x, y, w, h, "atlas_final")
 
     log("ARRANGE_DONE")
-    # Hypr fights floats: Herdr often collapses (~163px); Atlas TL not stable.
-    # Remeasure and re-place any role whose w/h is off by >20%; leave floats set.
-    roles = correct_after_arrange(roles, layout, meta)
+    # Hypr fights floats: recenters to ~1718,378; tiling drops float; extras retile.
+    # Remeasure pos+size; settle force-place all four from stored addresses.
+    roles = correct_after_arrange(roles, layout, meta, addrs=addrs)
     dump_geo("GEO")
-    # Fail if roles missing or Herdr still absurdly narrow / any fs full-cover
+    # Fail if roles missing or Herdr still absurdly narrow / any fs full-cover / pos off
     fail = False
     if any(r not in roles for r in ROLES):
         log("MISSING_ROLES_FINAL", [r for r in ROLES if r not in roles])
         fail = True
-    for role, rect in layout.items():
+    for role in PLACE_ORDER:
+        rect = layout.get(role)
+        if not rect:
+            continue
         c = roles.get(role)
         needs, why = role_needs_correct(role, c, rect, meta)
         if needs:
             log("FINAL_OFF", role, why)
-            # Still exit 0 for transient Hypr races unless missing/full-cover/herdr collapsed
+            # Exit 2 on herdr / fullscreen / position-off / not-floating (quadrant stick)
             if role == "herdr" or (c and fs_value(c) != 0):
+                fail = True
+            elif why.startswith("pos ") or why.startswith("not_floating"):
                 fail = True
     if fail:
         sys.exit(2)

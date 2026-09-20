@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Full-product 2x2 quadrant stick**: `role_needs_correct` now fails on position off by >~40px (not just size); `place_final` re-asserts float before resize/move, double-moves against Hypr float-center, pins via `hl.dsp.window.pin`; close extra Nautilus; prefer floating-on-target role pick; after correct passes settle + force-place all four from stored addresses. Never `fullscreen mode=0`.
+
 - **Full-product 2x2 arrange correct-after-done**: after `ARRANGE_DONE`, remeasure each role and re-place when width/height is off by >20% from TL/TR/BL/BR targets (`place_final` leaves floats set; never `fullscreen mode=0`). Herdr collapsed ~163px → re-float to half-pane (≥~800px); clear fs≥2 full-cover. Logs `MEASURE` / `CORRECT` / `CORRECT_OK`.
 
 - **Full-product 2x2 live fix (ToS / Herdr app-id / okstratr)**: Atlas dedicated profile now seeds `First Run` + Local State/Preferences (`require_eula: false`) and launches with `--no-first-run`; wait past Additional Terms title; fallback to default Chromium profile if still stuck. Classify empty-class windows titled Terms of Service / Atlas / 8766 / 127.0.0.1. Prefer `foot --app-id=herdr -T Herdr` before `omarchy-launch-terminal-herdr`. okstratr panel summon retries until FloatingWindow titled Okstratr maps. Longer arrange wait (22s).
