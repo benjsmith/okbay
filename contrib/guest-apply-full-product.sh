@@ -23,6 +23,32 @@ for f in okbay-open-full-product.sh okbay-open-atlas.sh okbay-arrange-full-produ
 done
 install -m 0644 "$REPO/contrib/hypr-bindings.lua" "$PLUGIN_CONTRIB/hypr-bindings.lua"
 
+# Default OKBAY_WORKSPACE → BioCure freeze tip 5b9711895 (not hybrid 76142912).
+BIOCURE=""
+for cand in \
+  "/mnt/mac/Workspaces/biocure-confirm-v1-query-5b9711895" \
+  "${HOME}/Workspaces/biocure-confirm-v1-query-5b9711895" \
+  "${HOME}/Work/Workspaces/biocure-confirm-v1-query-5b9711895"
+do
+  if [[ -d "$cand" ]]; then BIOCURE="$cand"; break; fi
+done
+if [[ -n "$BIOCURE" ]]; then
+  mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/systemd/user/okbayd.service.d"
+  printf '%s\n' "$BIOCURE" >"${HOME}/.local/state/okbay/workspace"
+  cat >"${HOME}/.config/systemd/user/okbayd.service.d/workspace.conf" <<EOF
+[Service]
+Environment=OKBAY_WORKSPACE=$BIOCURE
+EOF
+  systemctl --user daemon-reload 2>/dev/null || true
+  # Restart daemon so :8766 serves BioCure before next Super+Shift+K
+  if systemctl --user is-enabled okbayd.service >/dev/null 2>&1 \
+    || systemctl --user status okbayd.service >/dev/null 2>&1; then
+    OKBAY_WORKSPACE="$BIOCURE" systemctl --user restart okbayd.service 2>/dev/null || true
+  fi
+  echo "guest-apply: OKBAY_WORKSPACE=$BIOCURE"
+fi
+
+
 BINDINGS_LUA="${HOME}/.config/hypr/bindings.lua"
 mkdir -p "${HOME}/.config/hypr"
 if [[ ! -f "$BINDINGS_LUA" ]]; then

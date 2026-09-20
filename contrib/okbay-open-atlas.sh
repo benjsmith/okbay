@@ -10,6 +10,8 @@
 # Frameless / option-3 packaging:
 #   Chromium --app= strips browser chrome; --class=OkbayAtlas lets Hyprland
 #   windowrules float/fullscreen/special-workspace (see hypr-bindings.lua).
+# OKBAY_ATLAS_TILED=1 (full-product): never --start-fullscreen; replace any
+# existing Atlas process so a prior solo fullscreen window cannot stick.
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 export PATH="${HOME}/.local/bin:/usr/bin:${PATH}"
 
@@ -102,8 +104,58 @@ launch_atlas_chromium() {
   fi
 }
 
+unset_atlas_fullscreen() {
+  command -v hyprctl >/dev/null 2>&1 || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  hyprctl clients -j 2>/dev/null | ATLAS_CLASS="${ATLAS_CLASS}" python3 -c '
+import json, os, subprocess, sys
+want = (os.environ.get("ATLAS_CLASS") or "OkbayAtlas").lower()
+try:
+    clients = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for c in clients:
+    cls = c.get("class")
+    classes = " ".join(str(x) for x in cls) if isinstance(cls, list) else str(cls or "")
+    blob = " ".join([
+        classes,
+        str(c.get("initialClass") or ""),
+        str(c.get("title") or ""),
+        str(c.get("initialTitle") or ""),
+    ]).lower()
+    if want not in blob and "8766/atlas" not in blob and not ("atlas" in blob and "chromium" in blob):
+        continue
+    addr = c.get("address") or ""
+    if not addr:
+        continue
+    subprocess.run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"], capture_output=True)
+    subprocess.run(["hyprctl", "dispatch", "fullscreen", "0"], capture_output=True)
+    subprocess.run(["hyprctl", "dispatch", "fullscreen", "0", f"address:{addr}"], capture_output=True)
+    subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"], capture_output=True)
+' 2>/dev/null || true
+}
+
 ensure_atlas_chromium() {
-  # Prefer focus existing Atlas Chromium; else launch once.
+  # Full-product / tiled: NEVER reuse a leftover --start-fullscreen Atlas.
+  # Kill and relaunch without --start-fullscreen, then force hyprctl fullscreen 0.
+  if [[ "${OKBAY_ATLAS_TILED:-0}" == "1" ]]; then
+    if [[ "$(count_atlas_chromium)" -gt 0 ]]; then
+      pkill -f "${ATLAS_MATCH}" 2>/dev/null || true
+      sleep 0.25
+    fi
+    launch_atlas_chromium
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+      sleep 0.15
+      if focus_atlas_window; then
+        unset_atlas_fullscreen
+        return 0
+      fi
+    done
+    unset_atlas_fullscreen
+    return 0
+  fi
+
+  # Solo Atlas: prefer focus existing; else launch once (may use --start-fullscreen).
   if focus_atlas_window; then
     return 0
   fi
@@ -147,8 +199,12 @@ if [[ "${ATLAS_URL}" == *#* ]]; then
   launch_atlas_chromium
   for _ in 1 2 3 4 5 6 7 8 9 10; do
     sleep 0.15
-    focus_atlas_window && exit 0
+    if focus_atlas_window; then
+      [[ "${OKBAY_ATLAS_TILED:-0}" == "1" ]] && unset_atlas_fullscreen
+      exit 0
+    fi
   done
+  [[ "${OKBAY_ATLAS_TILED:-0}" == "1" ]] && unset_atlas_fullscreen
   exit 0
 fi
 

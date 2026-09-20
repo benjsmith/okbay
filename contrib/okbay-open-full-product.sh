@@ -12,8 +12,10 @@
 # Super+Shift+O remains okstratr-only (okstratr contrib/hypr-bindings.lua).
 #
 # Omarchy-like behaviour (not float-over-current):
-#   1) Switch to a fresh / dedicated Hyprland workspace
-#   2) Populate a 2x2 panel split:
+#   1) Kill leftover fullscreen Atlas on the *previous* workspace
+#   2) Ensure okbayd serves BioCure freeze workspace on :8766
+#   3) Switch to a fresh / dedicated Hyprland workspace
+#   4) Populate a 2x2 panel split:
 #        Top-left:     okbay / Atlas   (class OkbayAtlas)
 #        Top-right:    Nautilus        (org.gnome.Nautilus)
 #        Bottom-left:  Herdr
@@ -22,13 +24,14 @@
 # Env knobs:
 #   OKBAY_FULL_PRODUCT_WS   workspace target: "next-empty" (default), a number,
 #                           or "special:okbay"
-#   OKBAY_WORKSPACE         wiki/vault root for Nautilus (else well-known paths)
+#   OKBAY_WORKSPACE         wiki/vault root (default: BioCure freeze tip 5b9711895)
 #   OKSTRATR_URL            default http://127.0.0.1:8767
 #   OKBAY_ATLAS_URL         Atlas URL for the TL pane
 set -u
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 export PATH="${HOME}/.local/bin:/usr/bin:${PATH}"
-export OKBAY_ATLAS_TILED="${OKBAY_ATLAS_TILED:-1}"
+# Full-product MUST never launch Chromium --start-fullscreen (Ben overlay bug).
+export OKBAY_ATLAS_TILED=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG="${OKBAY_FULL_PRODUCT_LOG:-/tmp/okbay-full-product.log}"
@@ -47,7 +50,45 @@ if [[ -z "${WAYLAND_DISPLAY:-}" || -z "${XDG_RUNTIME_DIR:-}" ]]; then
   fi
 fi
 
+# BioCure freeze tip 5b9711895 (not hybrid 76142912). Guest + host well-known paths.
+BIOCURE_NAME="biocure-confirm-v1-query-5b9711895"
+resolve_biocure_workspace() {
+  local cand
+  for cand in \
+    "${OKBAY_WORKSPACE:-}" \
+    "/mnt/mac/Workspaces/${BIOCURE_NAME}" \
+    "${HOME}/Workspaces/${BIOCURE_NAME}" \
+    "${HOME}/Work/Workspaces/${BIOCURE_NAME}" \
+    "${HOME}/Work/${BIOCURE_NAME}"
+  do
+    [[ -n "$cand" && -d "$cand" ]] || continue
+    # Prefer a real workspace root (wiki/ or vault/ or .curator/)
+    if [[ -d "$cand/wiki" || -d "$cand/vault" || -d "$cand/.curator" || -d "$cand/.okbay" ]]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+    printf '%s\n' "$cand"
+    return 0
+  done
+  # Last resort: leave empty so caller can fall back
+  return 1
+}
+
+# Default OKBAY_WORKSPACE to BioCure freeze when unset / empty.
+if [[ -z "${OKBAY_WORKSPACE:-}" ]]; then
+  if WS_RESOLVED="$(resolve_biocure_workspace 2>/dev/null)"; then
+    export OKBAY_WORKSPACE="$WS_RESOLVED"
+  fi
+fi
+# Still export even when caller set a non-BioCure path — resolve_nautilus uses it first.
+if [[ -n "${OKBAY_WORKSPACE:-}" ]]; then
+  export OKBAY_WORKSPACE
+  log "OKBAY_WORKSPACE=$OKBAY_WORKSPACE"
+fi
+
 OKSTRATR_URL="${OKSTRATR_URL:-http://127.0.0.1:8767}"
+OKBAY_URL="${OKBAY_URL:-http://127.0.0.1:8766}"
+
 ensure_okstratr_serve() {
   if command -v curl >/dev/null 2>&1; then
     if curl -fsS -m 2 "${OKSTRATR_URL}/api/status" >/dev/null 2>&1 \
@@ -77,13 +118,145 @@ ensure_okstratr_serve() {
   return 0
 }
 
+okbay_status_workspace() {
+  command -v curl >/dev/null 2>&1 || return 1
+  curl -fsS -m 2 "${OKBAY_URL}/api/status" 2>/dev/null | python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+print(d.get("workspace") or "")
+' 2>/dev/null
+}
+
+ensure_okbay_serve() {
+  # Serve BioCure freeze on :8766 before Atlas opens.
+  local want="${OKBAY_WORKSPACE:-}"
+  if [[ -z "$want" ]]; then
+    want="$(resolve_biocure_workspace 2>/dev/null || true)"
+  fi
+  if [[ -z "$want" || ! -d "$want" ]]; then
+    log "okbay workspace missing; skip daemon restart want=${want:-}"
+    # Still try to ensure something is listening
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsS -m 2 "${OKBAY_URL}/health" >/dev/null 2>&1 \
+        || curl -fsS -m 2 "${OKBAY_URL}/api/status" >/dev/null 2>&1 \
+        && log "okbay already up (unknown workspace)"
+    fi
+    return 0
+  fi
+  export OKBAY_WORKSPACE="$want"
+  log "ensure okbayd workspace=$want"
+
+  local cur=""
+  cur="$(okbay_status_workspace || true)"
+  if [[ -n "$cur" ]]; then
+    log "okbay current workspace=$cur"
+  fi
+
+  local need_restart=0
+  if [[ -z "$cur" ]]; then
+    need_restart=1
+  elif [[ "$cur" != "$want" ]]; then
+    # Allow suffix match (symlink /mnt/mac vs ~/Workspaces)
+    case "$cur" in
+      "$want"|"$want"/*) need_restart=0 ;;
+      *"${BIOCURE_NAME}"*)
+        # Already on BioCure tip path — ok even if prefix differs
+        if [[ "$want" == *"${BIOCURE_NAME}"* ]]; then
+          need_restart=0
+          log "okbay already on BioCure ($cur)"
+        else
+          need_restart=1
+        fi
+        ;;
+      *) need_restart=1 ;;
+    esac
+  fi
+
+  # Reject hybrid tip workspace if accidentally active
+  if [[ "$cur" == *"76142912"* ]]; then
+    log "okbay on hybrid 76142912 — forcing BioCure freeze restart"
+    need_restart=1
+  fi
+
+  if [[ "$need_restart" -eq 0 ]]; then
+    if curl -fsS -m 2 "${OKBAY_URL}/health" >/dev/null 2>&1 \
+      || curl -fsS -m 2 "${OKBAY_URL}/api/status" >/dev/null 2>&1; then
+      log "okbay already serving desired workspace"
+      return 0
+    fi
+    need_restart=1
+  fi
+
+  log "okbayd restarting with OKBAY_WORKSPACE=$want"
+  # Point state marker so python daemon picks it up
+  mkdir -p "${HOME}/.local/state/okbay"
+  printf '%s\n' "$want" >"${HOME}/.local/state/okbay/workspace" 2>/dev/null || true
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user stop okbayd.service 2>/dev/null || true
+  fi
+  # Kill stray listeners on 8766
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k 8766/tcp >/dev/null 2>&1 || true
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -ti :8766 2>/dev/null | xargs -r kill 2>/dev/null || true
+  fi
+  sleep 0.3
+
+  if command -v okbay >/dev/null 2>&1; then
+    OKBAY_WORKSPACE="$want" nohup okbay setup --workspace "$want" >>/tmp/okbay-setup.log 2>&1 || true
+  fi
+
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user list-unit-files okbayd.service >/dev/null 2>&1; then
+    mkdir -p "${HOME}/.config/systemd/user"
+    # Ensure Environment=OKBAY_WORKSPACE in a drop-in
+    mkdir -p "${HOME}/.config/systemd/user/okbayd.service.d"
+    cat >"${HOME}/.config/systemd/user/okbayd.service.d/workspace.conf" <<EOF
+[Service]
+Environment=OKBAY_WORKSPACE=$want
+EOF
+    systemctl --user daemon-reload 2>/dev/null || true
+    OKBAY_WORKSPACE="$want" systemctl --user restart okbayd.service 2>/dev/null \
+      || OKBAY_WORKSPACE="$want" systemctl --user start okbayd.service 2>/dev/null \
+      || true
+  fi
+
+  # Fallback: direct okbayd / okbay serve
+  if ! curl -fsS -m 2 "${OKBAY_URL}/health" >/dev/null 2>&1 \
+    && ! curl -fsS -m 2 "${OKBAY_URL}/api/status" >/dev/null 2>&1; then
+    if command -v okbayd >/dev/null 2>&1; then
+      OKBAY_WORKSPACE="$want" nohup okbayd --port 8766 >>/tmp/okbayd.log 2>&1 &
+    elif command -v okbay >/dev/null 2>&1; then
+      OKBAY_WORKSPACE="$want" nohup okbay serve >>/tmp/okbayd.log 2>&1 &
+    fi
+  fi
+
+  for _ in $(seq 1 24); do
+    sleep 0.25
+    cur="$(okbay_status_workspace || true)"
+    if [[ -n "$cur" ]]; then
+      log "okbay up workspace=$cur"
+      return 0
+    fi
+    if curl -fsS -m 1 "${OKBAY_URL}/health" >/dev/null 2>&1; then
+      log "okbay health ok (status workspace pending)"
+      return 0
+    fi
+  done
+  log "okbay serve not confirmed; continuing"
+  return 0
+}
+
 resolve_nautilus_path() {
   local cand
   for cand in \
     "${OKBAY_WORKSPACE:-}" \
-    "${HOME}/Work/Workspaces/biocure-confirm-v1-query-5b9711895" \
-    "${HOME}/Workspaces/biocure-confirm-v1-query-5b9711895" \
-    "/mnt/mac/Workspaces/biocure-confirm-v1-query-5b9711895" \
+    "/mnt/mac/Workspaces/${BIOCURE_NAME}" \
+    "${HOME}/Workspaces/${BIOCURE_NAME}" \
+    "${HOME}/Work/Workspaces/${BIOCURE_NAME}" \
     "${HOME}/Work/okbay"
   do
     [[ -n "$cand" && -d "$cand" ]] || continue
@@ -99,6 +272,109 @@ resolve_nautilus_path() {
     return 0
   done
   printf '%s\n' "${HOME}"
+}
+
+current_workspace_id() {
+  if ! command -v hyprctl >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' ""
+    return 0
+  fi
+  hyprctl activeworkspace -j 2>/dev/null | python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    print(d.get("id") or "")
+except Exception:
+    print("")
+' 2>/dev/null || printf '%s\n' ""
+}
+
+kill_stale_fullscreen_atlas() {
+  # Kill leftover fullscreen Atlas on the *previous* (and any non-target) workspace
+  # before we enter full-product mode. Leaves a clean slate for TL pane.
+  command -v hyprctl >/dev/null 2>&1 || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  local prev="$1"
+  local target="$2"
+  log "kill_stale_fullscreen_atlas prev=$prev target=$target"
+  PREV_WS="$prev" TARGET_WS="$target" python3 - <<'PY' >>"$LOG" 2>&1 || true
+import json, os, subprocess, time
+
+def run(args):
+    return subprocess.run(args, capture_output=True, text=True)
+
+try:
+    clients = json.loads(subprocess.check_output(["hyprctl", "clients", "-j"], text=True))
+except Exception as e:
+    print("clients err", e)
+    raise SystemExit(0)
+
+prev = str(os.environ.get("PREV_WS") or "")
+target = str(os.environ.get("TARGET_WS") or "")
+
+def is_atlas(c):
+    cls = c.get("class")
+    if isinstance(cls, list):
+        classes = " ".join(str(x) for x in cls)
+    else:
+        classes = str(cls or "")
+    blob = " ".join([
+        classes,
+        str(c.get("initialClass") or ""),
+        str(c.get("title") or ""),
+        str(c.get("initialTitle") or ""),
+    ]).lower()
+    return (
+        "okbayatlas" in blob
+        or "8766/atlas" in blob
+        or ("atlas" in blob and "chromium" in blob)
+    )
+
+killed = 0
+for c in clients:
+    if not is_atlas(c):
+        continue
+    ws = c.get("workspace") or {}
+    ws_id = str(ws.get("id") or "")
+    ws_name = str(ws.get("name") or "")
+    on_target = (target and (ws_id == target or ws_name == target))
+    fs = c.get("fullscreen") or 0
+    try:
+        fs_on = bool(int(fs))
+    except Exception:
+        fs_on = bool(fs)
+    # Kill Atlas that is fullscreen on previous workspace, or any Atlas not on target
+    # that is still fullscreen/float-covering.
+    should = False
+    if prev and (ws_id == prev or ws_name == prev) and (fs_on or c.get("floating")):
+        should = True
+    if not on_target and fs_on:
+        should = True
+    if not should:
+        # Also clear fullscreen on target leftovers so arrange can tile
+        if on_target and fs_on:
+            addr = c.get("address")
+            if addr:
+                run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"])
+                run(["hyprctl", "dispatch", "fullscreen", "0"])
+                run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
+                # togglefloating off if floating
+                if c.get("floating"):
+                    run(["hyprctl", "dispatch", f"togglefloating address:{addr}"])
+                print("unset fs/float on target Atlas", addr)
+        continue
+    addr = c.get("address")
+    if not addr:
+        continue
+    print("close stale Atlas", addr, "ws", ws_id, ws_name, "fs", fs)
+    run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"])
+    run(["hyprctl", "dispatch", "fullscreen", "0"])
+    run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"])
+    run(["hyprctl", "dispatch", f"closewindow address:{addr}"])
+    killed += 1
+    time.sleep(0.1)
+print("stale_atlas_killed", killed)
+PY
 }
 
 pick_workspace() {
@@ -149,11 +425,53 @@ launch_atlas_tiled() {
       break
     fi
   done
+  # Hard force: full-product never inherits a solo --start-fullscreen Atlas.
   export OKBAY_ATLAS_TILED=1
+  # Drop any existing Atlas before helper runs (belt + suspenders with open-atlas).
+  pkill -f 'chromium.*(8766/atlas|OkbayAtlas|--class=OkbayAtlas)' 2>/dev/null || true
+  sleep 0.2
   if [[ -n "$helper" ]]; then
-    "$helper" "$@" >/dev/null 2>&1 || true
+    OKBAY_ATLAS_TILED=1 "$helper" "$@" >/dev/null 2>&1 || true
   else
     log "okbay-open-atlas.sh missing"
+  fi
+  # Evidence: cmdline must NOT contain --start-fullscreen
+  sleep 0.3
+  if command -v pgrep >/dev/null 2>&1; then
+    local cmd
+    cmd="$(pgrep -af 'chromium.*(8766/atlas|OkbayAtlas)' 2>/dev/null | head -1 || true)"
+    log "atlas cmdline: ${cmd:-none}"
+    if [[ "$cmd" == *--start-fullscreen* ]]; then
+      log "ERROR atlas still has --start-fullscreen; killing and relaunching tiled"
+      pkill -f 'chromium.*(8766/atlas|OkbayAtlas|--class=OkbayAtlas)' 2>/dev/null || true
+      sleep 0.2
+      OKBAY_ATLAS_TILED=1 "$helper" "$@" >/dev/null 2>&1 || true
+      sleep 0.3
+      cmd="$(pgrep -af 'chromium.*(8766/atlas|OkbayAtlas)' 2>/dev/null | head -1 || true)"
+      log "atlas cmdline retry: ${cmd:-none}"
+    fi
+  fi
+  # Hypr: drop fullscreen even if windowrules re-applied
+  if command -v hyprctl >/dev/null 2>&1; then
+    hyprctl clients -j 2>/dev/null | python3 -c '
+import json,subprocess,sys
+try:
+    clients=json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+for c in clients:
+    blob=" ".join(str(x) for x in [
+        c.get("class"), c.get("initialClass"), c.get("title"), c.get("initialTitle")
+    ]).lower()
+    if "okbayatlas" not in blob and "8766/atlas" not in blob:
+        continue
+    addr=c.get("address") or ""
+    if not addr:
+        continue
+    subprocess.run(["hyprctl","dispatch","focuswindow",f"address:{addr}"],capture_output=True)
+    subprocess.run(["hyprctl","dispatch","fullscreen","0"],capture_output=True)
+    subprocess.run(["hyprctl","dispatch","fullscreenstate","0","0"],capture_output=True)
+' 2>/dev/null || true
   fi
 }
 
@@ -209,27 +527,35 @@ arrange_2x2() {
     helper="${HOME}/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-arrange-full-product.py"
   fi
   if [[ ! -f "$helper" ]]; then
+    helper="${HOME}/.local/bin/okbay-arrange-full-product.py"
+  fi
+  if [[ ! -f "$helper" ]]; then
     helper="${HOME}/.local/share/okbay/okbay-arrange-full-product.py"
   fi
   if [[ -f "$helper" ]]; then
-    WS_TARGET="$ws" python3 "$helper" >>"$LOG" 2>&1 || true
+    # Arrange appends ARRANGE_DONE + GEO to the same log
+    OKBAY_FULL_PRODUCT_LOG="$LOG" WS_TARGET="$ws" OKBAY_KILL_STALE_ATLAS=1 \
+      python3 "$helper" >>"$LOG" 2>&1 || log "arrange exit=$?"
   else
     log "arrange helper missing: $helper"
   fi
 }
 
+PREV_WS="$(current_workspace_id)"
+ensure_okbay_serve
 ensure_okstratr_serve
 WS="$(pick_workspace)"
-log "target workspace=$WS"
+log "prev workspace=$PREV_WS target workspace=$WS"
+kill_stale_fullscreen_atlas "$PREV_WS" "$WS"
 switch_workspace "$WS"
 launch_atlas_tiled "$@"
-sleep 0.35
-launch_nautilus
-sleep 0.25
-launch_herdr
-sleep 0.25
-summon_okstratr_panel
 sleep 0.45
+launch_nautilus
+sleep 0.3
+launch_herdr
+sleep 0.3
+summon_okstratr_panel
+sleep 0.55
 switch_workspace "$WS"
 arrange_2x2 "$WS"
 log "full-product done ws=$WS"
