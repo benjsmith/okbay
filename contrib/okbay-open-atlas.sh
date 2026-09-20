@@ -22,7 +22,7 @@ if [[ "${1:-}" == http://* || "${1:-}" == https://* ]]; then
 else
   ATLAS_URL="${OKBAY_ATLAS_URL:-http://127.0.0.1:8766/atlas}"
 fi
-ATLAS_MATCH='chromium.*(8766/atlas|OkbayAtlas|--class=OkbayAtlas)'
+ATLAS_MATCH='chromium.*(8766/atlas|OkbayAtlas|--class=OkbayAtlas|chrome-.*atlas)'
 ATLAS_CLASS="${OKBAY_ATLAS_CLASS:-OkbayAtlas}"
 
 # Import Wayland/Display from systemd user session when launched outside the desktop.
@@ -67,7 +67,13 @@ for c in clients:
     if "8766/atlas" in title.lower() or "8766/atlas" in initial.lower():
         print(c.get("address") or "")
         sys.exit(0)
-    if "chromium" in blob and ("okbay" in title.lower() or "atlas" in title.lower()):
+    # Omarchy Chromium often ignores --class=OkbayAtlas → chrome-127.0.0.1__atlas-Default
+    if classes.lower().startswith("chrome-") or initial_class.lower().startswith("chrome-"):
+        chrome_blob = (classes + " " + initial_class + " " + title + " " + initial).lower()
+        if "atlas" in chrome_blob or "8766" in chrome_blob:
+            print(c.get("address") or "")
+            sys.exit(0)
+    if ("chromium" in blob or "chrome" in blob) and ("okbay" in title.lower() or "atlas" in title.lower() or "8766" in blob):
         print(c.get("address") or "")
         sys.exit(0)
 sys.exit(1)
@@ -82,14 +88,20 @@ count_atlas_chromium() {
 
 launch_atlas_chromium() {
   # --app= : frameless Chromium app window (no tab strip / omnibox).
-  # --class= : Hyprland windowrule target (OkbayAtlas).
-  # --name= : X11/Wayland app_id hint on some Chromium builds.
+  # --class= / --name= : keep OkbayAtlas for Hypr windowrules when Chromium
+  # honours them. Under Omarchy Wayland, Chromium often ignores --class and
+  # reports app_id chrome-127.0.0.1__atlas-Default — arrange/classify must
+  # match that fallback (see okbay-arrange-full-product.py).
+  # Dedicated user-data-dir keeps Atlas cookies/profile separate from default.
   # OKBAY_ATLAS_TILED=1 (full-product 2x2): skip --start-fullscreen so the
   # pane can sit in a workspace grid instead of covering the prior desktop.
+  local profile="${OKBAY_ATLAS_PROFILE:-${HOME}/.local/share/okbay/chromium-atlas}"
+  mkdir -p "$profile" 2>/dev/null || true
   local flags=(
     --ozone-platform=wayland
     --class="${ATLAS_CLASS}"
     --name="${ATLAS_CLASS}"
+    --user-data-dir="${profile}"
     --app="${ATLAS_URL}"
   )
   if [[ "${OKBAY_ATLAS_TILED:-0}" != "1" ]]; then
@@ -123,7 +135,13 @@ for c in clients:
         str(c.get("title") or ""),
         str(c.get("initialTitle") or ""),
     ]).lower()
-    if want not in blob and "8766/atlas" not in blob and not ("atlas" in blob and "chromium" in blob):
+    if (
+        want not in blob
+        and "8766/atlas" not in blob
+        and not ("atlas" in blob and ("chromium" in blob or "chrome" in blob))
+        and not (blob.startswith("chrome-") and ("atlas" in blob or "8766" in blob))
+        and not ("chrome-" in blob and ("atlas" in blob or "8766" in blob))
+    ):
         continue
     addr = c.get("address") or ""
     if not addr:

@@ -206,9 +206,23 @@ ensure_okbay_serve() {
   fi
 
   log "okbayd restarting with OKBAY_WORKSPACE=$want"
-  # Point state marker so python daemon picks it up
-  mkdir -p "${HOME}/.local/state/okbay"
+  # State + config dirs before any serve/setup (viewer mutex + workspace marker)
+  mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/okbay"
   printf '%s\n' "$want" >"${HOME}/.local/state/okbay/workspace" 2>/dev/null || true
+
+  # Full-product needs HTML Atlas host (qml → /atlas 409). Prefer CLI; else write viewer.json.
+  if command -v okbay >/dev/null 2>&1; then
+    okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
+      || OKBAY_WORKSPACE="$want" okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
+      || true
+  elif [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
+    OKBAY_WORKSPACE="$want" PYTHONPATH="${HOME}/src/okbay/src" \
+      python3 -m okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 || true
+  else
+    printf '%s\n' '{"mode":"html","source":"full-product"}' >"${HOME}/.config/okbay/viewer.json"
+  fi
+  export OKBAY_VIEWER_MODE=html
+  log "viewer mode html (full-product)"
 
   if command -v systemctl >/dev/null 2>&1; then
     systemctl --user stop okbayd.service 2>/dev/null || true
@@ -221,31 +235,42 @@ ensure_okbay_serve() {
   fi
   sleep 0.3
 
+  # NEVER block Super+Shift+K on foreground setup — background only.
   if command -v okbay >/dev/null 2>&1; then
-    OKBAY_WORKSPACE="$want" nohup okbay setup --workspace "$want" >>/tmp/okbay-setup.log 2>&1 || true
+    OKBAY_WORKSPACE="$want" nohup okbay setup --workspace "$want" >>/tmp/okbay-setup.log 2>&1 &
+    log "okbay setup backgrounded pid=$!"
+  elif [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
+    OKBAY_WORKSPACE="$want" PYTHONPATH="${HOME}/src/okbay/src" \
+      nohup python3 -m okbay setup --workspace "$want" >>/tmp/okbay-setup.log 2>&1 &
+    log "okbay setup (module) backgrounded pid=$!"
   fi
 
   if command -v systemctl >/dev/null 2>&1 && systemctl --user list-unit-files okbayd.service >/dev/null 2>&1; then
     mkdir -p "${HOME}/.config/systemd/user"
-    # Ensure Environment=OKBAY_WORKSPACE in a drop-in
+    # Ensure Environment=OKBAY_WORKSPACE + HTML viewer in a drop-in
     mkdir -p "${HOME}/.config/systemd/user/okbayd.service.d"
     cat >"${HOME}/.config/systemd/user/okbayd.service.d/workspace.conf" <<EOF
 [Service]
 Environment=OKBAY_WORKSPACE=$want
+Environment=OKBAY_VIEWER_MODE=html
 EOF
     systemctl --user daemon-reload 2>/dev/null || true
-    OKBAY_WORKSPACE="$want" systemctl --user restart okbayd.service 2>/dev/null \
-      || OKBAY_WORKSPACE="$want" systemctl --user start okbayd.service 2>/dev/null \
+    OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html systemctl --user restart okbayd.service 2>/dev/null \
+      || OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html systemctl --user start okbayd.service 2>/dev/null \
       || true
   fi
 
-  # Fallback: direct okbayd / okbay serve
+  # Fallback: prefer PYTHONPATH module serve when okbayd wrapper fails / health down
   if ! curl -fsS -m 2 "${OKBAY_URL}/health" >/dev/null 2>&1 \
     && ! curl -fsS -m 2 "${OKBAY_URL}/api/status" >/dev/null 2>&1; then
-    if command -v okbayd >/dev/null 2>&1; then
-      OKBAY_WORKSPACE="$want" nohup okbayd --port 8766 >>/tmp/okbayd.log 2>&1 &
+    if [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
+      log "okbay serve via PYTHONPATH=~/src/okbay/src python3 -m okbay serve"
+      OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html PYTHONPATH="${HOME}/src/okbay/src" \
+        nohup python3 -m okbay serve >>/tmp/okbayd.log 2>&1 &
+    elif command -v okbayd >/dev/null 2>&1; then
+      OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html nohup okbayd --port 8766 >>/tmp/okbayd.log 2>&1 &
     elif command -v okbay >/dev/null 2>&1; then
-      OKBAY_WORKSPACE="$want" nohup okbay serve >>/tmp/okbayd.log 2>&1 &
+      OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html nohup okbay serve >>/tmp/okbayd.log 2>&1 &
     fi
   fi
 
@@ -345,7 +370,9 @@ def is_atlas(c):
     return (
         "okbayatlas" in blob
         or "8766/atlas" in blob
-        or ("atlas" in blob and "chromium" in blob)
+        or ("atlas" in blob and ("chromium" in blob or "chrome" in blob))
+        or (blob.startswith("chrome-") and ("atlas" in blob or "8766" in blob))
+        or ("chrome-" in blob and ("atlas" in blob or "8766" in blob))
     )
 
 killed = 0
@@ -476,7 +503,12 @@ for c in clients:
     blob=" ".join(str(x) for x in [
         c.get("class"), c.get("initialClass"), c.get("title"), c.get("initialTitle")
     ]).lower()
-    if "okbayatlas" not in blob and "8766/atlas" not in blob:
+    if (
+        "okbayatlas" not in blob
+        and "8766/atlas" not in blob
+        and not ("chrome-" in blob and ("atlas" in blob or "8766" in blob))
+        and not ("atlas" in blob and "chrome" in blob)
+    ):
         continue
     addr=c.get("address") or ""
     if not addr:
@@ -502,6 +534,7 @@ launch_nautilus() {
 }
 
 launch_herdr() {
+  log "launch herdr"
   if command -v curl >/dev/null 2>&1; then
     curl -fsS -m 2 -X POST "${OKSTRATR_URL}/api/herdr/launch" \
       -H 'Content-Type: application/json' \
@@ -511,23 +544,57 @@ launch_herdr() {
       -d '{"kind":"auto","drive_herdr":true}' >/dev/null 2>&1 \
     || true
   fi
-  sleep 0.4
+  sleep 0.45
+  local has=0
   if command -v hyprctl >/dev/null 2>&1; then
-    if ! hyprctl clients -j 2>/dev/null | grep -qi herdr; then
-      if command -v uwsm-app >/dev/null 2>&1; then
-        nohup uwsm-app -- herdr >/tmp/okbay-herdr.log 2>&1 &
-      elif command -v herdr >/dev/null 2>&1; then
-        nohup herdr >/tmp/okbay-herdr.log 2>&1 &
-      elif command -v omarchy-launch-terminal-herdr >/dev/null 2>&1; then
-        nohup omarchy-launch-terminal-herdr >/tmp/okbay-herdr.log 2>&1 &
-      fi
+    if hyprctl clients -j 2>/dev/null | grep -qi herdr; then
+      has=1
     fi
+  fi
+  if [[ "$has" -eq 1 ]]; then
+    log "herdr already mapped"
+    return 0
+  fi
+  # Omarchy: prefer dedicated herdr terminal launcher, then uwsm/foot --app-id=herdr
+  if command -v omarchy-launch-terminal-herdr >/dev/null 2>&1; then
+    log "herdr via omarchy-launch-terminal-herdr"
+    nohup omarchy-launch-terminal-herdr >>/tmp/okbay-herdr.log 2>&1 &
+  elif command -v uwsm-app >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
+    log "herdr via uwsm-app -- herdr"
+    nohup uwsm-app -- herdr >>/tmp/okbay-herdr.log 2>&1 &
+  elif command -v uwsm-app >/dev/null 2>&1 && command -v foot >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
+    log "herdr via uwsm-app -- foot --app-id=herdr"
+    nohup uwsm-app -- foot --app-id=herdr -T Herdr -e herdr >>/tmp/okbay-herdr.log 2>&1 &
+  elif command -v foot >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
+    log "herdr via foot --app-id=herdr"
+    nohup foot --app-id=herdr -T Herdr -e herdr >>/tmp/okbay-herdr.log 2>&1 &
+  elif command -v herdr >/dev/null 2>&1; then
+    log "herdr direct"
+    nohup herdr >>/tmp/okbay-herdr.log 2>&1 &
+  else
+    log "herdr binary/launcher missing"
   fi
 }
 
 summon_okstratr_panel() {
-  if command -v omarchy-shell >/dev/null 2>&1; then
-    omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 || true
+  log "summon okstratr panel"
+  if ! command -v omarchy-shell >/dev/null 2>&1; then
+    log "omarchy-shell missing; cannot summon okstratr"
+    return 0
+  fi
+  # Primary: panel surface (Quickshell FloatingWindow title Okstratr)
+  omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+    || omarchy-shell shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+    || true
+  sleep 0.4
+  # Retry once — cold Quickshell plugin load can miss the first summon
+  if command -v hyprctl >/dev/null 2>&1; then
+    if ! hyprctl clients -j 2>/dev/null | grep -qiE 'okstratr|quickshell|"class":"qs"'; then
+      log "okstratr not mapped yet; retry summon + desk surface"
+      omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 || true
+      omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"desk"}' >/dev/null 2>&1 || true
+      sleep 0.35
+    fi
   fi
 }
 
@@ -546,9 +613,9 @@ arrange_2x2() {
     helper="${HOME}/.local/share/okbay/okbay-arrange-full-product.py"
   fi
   if [[ -f "$helper" ]]; then
-    # Arrange appends ARRANGE_DONE + GEO to the same log
+    # Arrange writes ARRANGE_DONE + GEO to LOG itself (avoid >>LOG double lines)
     OKBAY_FULL_PRODUCT_LOG="$LOG" WS_TARGET="$ws" OKBAY_KILL_STALE_ATLAS=1 \
-      python3 "$helper" >>"$LOG" 2>&1 || log "arrange exit=$?"
+      python3 "$helper" 2>>"$LOG" || log "arrange exit=$?"
   else
     log "arrange helper missing: $helper"
   fi

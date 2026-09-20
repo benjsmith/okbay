@@ -32,18 +32,32 @@ for cand in \
 do
   if [[ -d "$cand" ]]; then BIOCURE="$cand"; break; fi
 done
+# Always ensure state dir exists (serve/setup markers)
+mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/okbay"
+
+# Full-product Chromium Atlas needs HTML viewer (qml → /atlas 409)
+if command -v okbay >/dev/null 2>&1; then
+  okbay viewer set html >/tmp/okbay-viewer.log 2>&1 || true
+elif [[ -d "$REPO/src/okbay" ]]; then
+  PYTHONPATH="$REPO/src" python3 -m okbay viewer set html >/tmp/okbay-viewer.log 2>&1 || true
+else
+  printf '%s\n' '{"mode":"html","source":"guest-apply-full-product"}' >"${HOME}/.config/okbay/viewer.json"
+fi
+echo "guest-apply: viewer mode html"
+
 if [[ -n "$BIOCURE" ]]; then
-  mkdir -p "${HOME}/.local/state/okbay" "${HOME}/.config/systemd/user/okbayd.service.d"
+  mkdir -p "${HOME}/.config/systemd/user/okbayd.service.d"
   printf '%s\n' "$BIOCURE" >"${HOME}/.local/state/okbay/workspace"
   cat >"${HOME}/.config/systemd/user/okbayd.service.d/workspace.conf" <<EOF
 [Service]
 Environment=OKBAY_WORKSPACE=$BIOCURE
+Environment=OKBAY_VIEWER_MODE=html
 EOF
   systemctl --user daemon-reload 2>/dev/null || true
-  # Restart daemon so :8766 serves BioCure before next Super+Shift+K
+  # Restart daemon so :8766 serves BioCure + HTML atlas before next Super+Shift+K
   if systemctl --user is-enabled okbayd.service >/dev/null 2>&1 \
     || systemctl --user status okbayd.service >/dev/null 2>&1; then
-    OKBAY_WORKSPACE="$BIOCURE" systemctl --user restart okbayd.service 2>/dev/null || true
+    OKBAY_WORKSPACE="$BIOCURE" OKBAY_VIEWER_MODE=html systemctl --user restart okbayd.service 2>/dev/null || true
   fi
   echo "guest-apply: OKBAY_WORKSPACE=$BIOCURE"
 fi

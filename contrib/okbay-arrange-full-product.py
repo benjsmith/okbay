@@ -30,6 +30,15 @@ DEFAULT_TOP_BAR = int(os.environ.get("OKBAY_TOP_BAR") or "32")
 def log(*parts):
     line = " ".join(str(p) for p in parts)
     print(line, flush=True)
+    # Avoid double-write when caller already redirects stdout to LOG
+    # (okbay-open-full-product.sh historically did `python3 helper >>$LOG`).
+    try:
+        out_real = os.path.realpath("/proc/self/fd/1")
+        log_real = os.path.realpath(LOG)
+        if out_real == log_real:
+            return
+    except OSError:
+        pass
     try:
         with open(LOG, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
@@ -118,10 +127,22 @@ def classify(c):
     cls = class_str(c)
     initial_cls = str(c.get("initialClass") or "").lower()
 
-    # Atlas (Chromium --class=OkbayAtlas or URL title)
-    if "okbayatlas" in b or ("8766/atlas" in b) or ("atlas" in b and "chromium" in b):
+    # Atlas: prefer --class=OkbayAtlas; Omarchy Chromium often ignores --class and
+    # reports Wayland app_id like chrome-127.0.0.1__atlas-Default.
+    if "okbayatlas" in b or "okbayatlas" in cls or "okbayatlas" in initial_cls:
         return "atlas"
-    if "okbayatlas" in cls or "okbayatlas" in initial_cls:
+    if "8766/atlas" in b or "8766/atlas" in title or "8766/atlas" in initial:
+        return "atlas"
+    # chrome-<host>__atlas-* / chrome-*8766* / title hosts atlas URL
+    if cls.startswith("chrome-") or initial_cls.startswith("chrome-"):
+        chrome_blob = f"{cls} {initial_cls} {title} {initial}"
+        if (
+            "atlas" in chrome_blob
+            or "8766" in chrome_blob
+            or ("127.0.0.1" in chrome_blob and "atlas" in b)
+        ):
+            return "atlas"
+    if ("atlas" in b and ("chromium" in b or "chrome" in b)):
         return "atlas"
 
     # Nautilus

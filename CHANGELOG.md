@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Full-product 2x2 Omarchy harden**: classify Atlas as `chrome-*atlas*` (Chromium ignores `--class=OkbayAtlas` on Wayland); keep `--class=OkbayAtlas` + dedicated Chromium profile; Herdr via `omarchy-launch-terminal-herdr` / `uwsm-app` / `foot --app-id=herdr`; okstratr panel summon retry; force `okbay viewer set html` + `mkdir ~/.local/state/okbay` before serve; never block on foreground `okbay setup` (background `&`); prefer `PYTHONPATH=~/src/okbay/src python3 -m okbay serve`; dedupe arrange log (stdout+file double-write).
+
 - **Hypr full-product arrange harden**: full-product forces `OKBAY_ATLAS_TILED=1`, kills any leftover Atlas, and **never** passes Chromium `--start-fullscreen` (relaunch if a solo fullscreen Atlas was focused); before tiling, unset Atlas float/fullscreen (`fullscreen 0`, `setfloating 0` / `togglefloating`); kill leftover fullscreen Atlas on the *previous* workspace; wait for all 4 roles; classify Quickshell FloatingWindow okstratr (title `Okstratr` / class `qs`|`quickshell`); explicit `movetoworkspace` + `resizewindowpixel`/`movewindowpixel` with monitor geometry minus top bar; `ARRANGE_DONE` + `GEO` lines → `/tmp/okbay-full-product.log`. Default `OKBAY_WORKSPACE` / Nautilus + Atlas to BioCure freeze `biocure-confirm-v1-query-5b9711895` (tip `5b9711895`, not hybrid `76142912`); ensure okbayd serves that workspace on `:8766` before Atlas opens.
 
 - **Omarchy polish (2026-09-20)**: keybind truth — Super+Shift+K full-product 2x2, Super+Ctrl+K Mac alt, Super+Shift+O okstratr-only, Super+Shift+S screenshot, Maps on **Super+Alt+S** (not Shift+M=Music). Atlas chrome: fixed-position brand actions (no workspace-chip reflow jump); animated loading ellipsis on `#status`.
