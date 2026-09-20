@@ -272,10 +272,10 @@ for c in clients:
     except Exception:
         fs_on = bool(fs)
     # Omarchy 0.56 Lua: mode=0 ENTERS fullscreen; toggle OFF with mode="fullscreen"
-    subprocess.run(["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{addr}" }})'], capture_output=True)
+    subprocess.run(["hyprctl", "dispatch", "hl.dsp.focus({ window = \"address:%s\" })" % addr], capture_output=True)
     if fs_on:
         subprocess.run(
-            ["hyprctl", "dispatch", 'hl.dsp.window.fullscreen({ mode = "fullscreen" })'],
+            ["hyprctl", "dispatch", "hl.dsp.window.fullscreen({ mode = \"fullscreen\" })"],
             capture_output=True,
         )
 ' 2>/dev/null || true
