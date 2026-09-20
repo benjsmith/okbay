@@ -7,6 +7,9 @@ Hardened for Omarchy Hyprland 0.56 Lua dispatchers (hl.dsp.*) — classic
 Also hardened for OkbayAtlas windowrules (float+fullscreen) and Quickshell
 FloatingWindow okstratr (title Okstratr / class quickshell|qs).
 
+Hyprland 0.56 / Omarchy: mode=0 ENTERS fullscreen (fs→2);
+mode="fullscreen" toggles OFF when fs!=0. Never clear with mode=0.
+
 Layout (monitor coords, top bar reserved):
   TL Atlas | TR Nautilus
   BL Herdr | BR okstratr
@@ -171,7 +174,12 @@ def classify(c):
         return "herdr"
 
     # okstratr — QML FloatingWindow (title Okstratr) under Quickshell
+    # Match org.quickshell + Okstratr even when non-float (windowrules vary).
     if title == "okstratr" or initial == "okstratr":
+        return "okstratr"
+    if ("org.quickshell" in cls or "org.quickshell" in initial_cls or "quickshell" in cls) and (
+        "okstratr" in title or "okstratr" in initial
+    ):
         return "okstratr"
     if "okstratr" in b or "benjsmith.okstratr" in b:
         return "okstratr"
@@ -247,6 +255,61 @@ def close_window(addr: str):
     dsp(f'hl.dsp.window.close({{ window = "address:{addr}" }})')
 
 
+def client_by_addr(addr: str):
+    for c in clients():
+        if c.get("address") == addr:
+            return c
+    return None
+
+
+def fs_value(c) -> int:
+    """Hyprland client.fullscreen: 0=off, nonzero=on (often 2)."""
+    if not c:
+        return 0
+    fs = c.get("fullscreen") or 0
+    try:
+        return int(fs)
+    except Exception:
+        return 1 if fs else 0
+
+
+def unset_fullscreen(addr: str) -> bool:
+    """Clear fullscreen using Omarchy/Hyprland 0.56-safe toggle.
+
+    LIVE PROVEN bug on Omarchy 0.56 Lua dispatchers:
+      hl.dsp.window.fullscreen({ mode = 0 })  → ENTERS fullscreen (fs→2)
+      hl.dsp.window.fullscreen({ mode = "fullscreen" }) → TOGGLES off when fs!=0
+    Never call mode=0 to clear.
+    """
+    c = client_by_addr(addr)
+    fs = fs_value(c)
+    if fs == 0:
+        return True
+    log("unset_fullscreen toggle-off", addr, "fs", fs)
+    focus_window(addr)
+    # Toggle fullscreen OFF (string mode, not numeric 0)
+    dsp(f'hl.dsp.window.fullscreen({{ mode = "fullscreen", window = "address:{addr}" }})')
+    dsp('hl.dsp.window.fullscreen({ mode = "fullscreen" })')
+    time.sleep(0.05)
+    c2 = client_by_addr(addr)
+    fs2 = fs_value(c2)
+    if fs2 != 0:
+        log("unset_fullscreen still on; toggle again", addr, "fs", fs2)
+        focus_window(addr)
+        dsp('hl.dsp.window.fullscreen({ mode = "fullscreen" })')
+        time.sleep(0.05)
+        fs2 = fs_value(client_by_addr(addr))
+    return fs2 == 0
+
+
+def unset_float_fullscreen(addr):
+    """Disable fullscreen (toggle-off) and floating before re-placing."""
+    focus_window(addr)
+    unset_fullscreen(addr)
+    dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
+    time.sleep(0.05)
+
+
 def kill_fullscreen_atlas_on_other_workspaces(target_ws):
     """Kill leftover fullscreen Atlas on *non-target* workspaces only.
 
@@ -265,13 +328,9 @@ def kill_fullscreen_atlas_on_other_workspaces(target_ws):
         addr = c.get("address")
         if not addr:
             continue
-        fs = c.get("fullscreen") or 0
-        try:
-            fs_on = bool(int(fs))
-        except Exception:
-            fs_on = bool(fs)
+        fs = fs_value(c)
         if on_target:
-            if fs_on or c.get("floating"):
+            if fs or c.get("floating"):
                 log("unset fs/float on target Atlas", addr, "fs", fs)
                 unset_float_fullscreen(addr)
             continue
@@ -287,22 +346,13 @@ def kill_fullscreen_atlas_on_other_workspaces(target_ws):
             "float",
             c.get("floating"),
         )
-        focus_window(addr)
-        dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+        # Toggle off first if needed (never mode=0 — that ENTERS fullscreen)
+        if fs:
+            unset_fullscreen(addr)
         close_window(addr)
         killed += 1
         time.sleep(0.1)
     return killed
-
-
-def unset_float_fullscreen(addr):
-    """Disable fullscreen and floating before re-placing (windowrule recovery)."""
-    focus_window(addr)
-    # Live-proven: mode = 0 (not "off" / action unset)
-    dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
-    dsp("hl.dsp.window.fullscreen({ mode = 0 })")
-    dsp(f'hl.dsp.window.float({{ action = "unset", window = "address:{addr}" }})')
-    time.sleep(0.05)
 
 
 def move_to_ws(addr, ws):
@@ -317,21 +367,36 @@ def place(addr, x, y, w, h, name):
     """Absolute float + resize + move for 2x2 geometry (prefer over tiling)."""
     log(f"place {name} {addr} -> {x},{y} {w}x{h}")
     focus_window(addr)
-    dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
-    dsp("hl.dsp.window.fullscreen({ mode = 0 })")
+    # Ensure not fullscreen before resize/move (mode=0 ENTERS fs — never use it)
+    if not unset_fullscreen(addr):
+        log("place WARN still fullscreen before resize", name, addr)
+
     # Exact pixel grid needs floating
     dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
     time.sleep(0.05)
-    dsp(
-        f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
-        f'window = "address:{addr}" }})'
-    )
-    dsp(
-        f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
-        f'window = "address:{addr}" }})'
-    )
-    # Re-assert after windowrules may re-fire
-    dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
+
+    def do_resize_move():
+        out_r = dsp(
+            f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+        out_m = dsp(
+            f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
+            f'window = "address:{addr}" }})'
+        )
+        return out_r, out_m
+
+    out_r, out_m = do_resize_move()
+    blob = f"{out_r} {out_m}".lower()
+    if "window is fullscreen" in blob or fs_value(client_by_addr(addr)) != 0:
+        log("place resize blocked by fullscreen; toggle+retry", name, addr)
+        unset_fullscreen(addr)
+        dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
+        time.sleep(0.05)
+        do_resize_move()
+
+    # Re-assert after windowrules may re-fire (toggle off only if still on)
+    unset_fullscreen(addr)
 
 
 def top_bar_px(m):
@@ -437,18 +502,8 @@ def main():
     if atlas and atlas.get("address"):
         # Final anti-fullscreen assert on Atlas + re-place TL
         addr = atlas["address"]
-        focus_window(addr)
-        dsp(f'hl.dsp.window.fullscreen({{ mode = 0, window = "address:{addr}" }})')
-        dsp(f'hl.dsp.window.float({{ action = "set", window = "address:{addr}" }})')
         x, y, w, h = layout["atlas"]
-        dsp(
-            f'hl.dsp.window.resize({{ x = {int(w)}, y = {int(h)}, relative = false, '
-            f'window = "address:{addr}" }})'
-        )
-        dsp(
-            f'hl.dsp.window.move({{ x = {int(x)}, y = {int(y)}, relative = false, '
-            f'window = "address:{addr}" }})'
-        )
+        place(addr, x, y, w, h, "atlas_final")
         focus_window(addr)
 
     log("ARRANGE_DONE")

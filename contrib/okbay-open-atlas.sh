@@ -266,10 +266,18 @@ for c in clients:
     addr = c.get("address") or ""
     if not addr:
         continue
-    subprocess.run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"], capture_output=True)
-    subprocess.run(["hyprctl", "dispatch", "fullscreen", "0"], capture_output=True)
-    subprocess.run(["hyprctl", "dispatch", "fullscreen", "0", f"address:{addr}"], capture_output=True)
-    subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "0", "0"], capture_output=True)
+    fs = c.get("fullscreen") or 0
+    try:
+        fs_on = bool(int(fs))
+    except Exception:
+        fs_on = bool(fs)
+    # Omarchy 0.56 Lua: mode=0 ENTERS fullscreen; toggle OFF with mode="fullscreen"
+    subprocess.run(["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{addr}" }})'], capture_output=True)
+    if fs_on:
+        subprocess.run(
+            ["hyprctl", "dispatch", 'hl.dsp.window.fullscreen({ mode = "fullscreen" })'],
+            capture_output=True,
+        )
 ' 2>/dev/null || true
 }
 
