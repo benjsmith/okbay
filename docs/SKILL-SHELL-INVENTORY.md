@@ -4,6 +4,28 @@ Branch: `feat/skill-shell-rationalization`
 Charter: `/workspace/skill-shell-rationalization/docs/CHARTER.md` (locked 2026-09-18)  
 Scope: this GitHub repo **is** the Omarchy plugin (`Panel.qml`, `BarWidget.qml`, …).
 
+## Import-charter gate (Switchbay v0.12.19)
+
+Switchbay v0.12.19 is a **behavior/performance gate** for the import charter,
+not a source-parity or source-migration plan. okbay imports and invokes the
+CE, curiosity-merge (CM), and okstratr skills through their public contracts.
+It must not vendor their servers, merge their source, copy their internals, or
+re-implement them for the shell; those skills remain the owners of their
+behavior and services.
+
+Pinned gate inputs:
+
+- CE skill: `5d2b967558dd052c62b23fbc03217b1ac2a18d5a` (short `5d2b967`).
+- BioCure wiki fixture: `biocure-confirm-v1-query-5b9711895`, freeze tip
+  `5b9711895` (wiki/corpus pin, **not** the CE skill SHA; full SHA is not
+  available in this checkout).
+
+The gate records behavior and performance at the import boundary: discovery,
+missing-skill/read-only behavior, CE ingest/query, CM preview/import/rollback,
+okstratr desk lifecycle, policy boundaries, startup/readiness, and measured
+resource/timing context. A release or fixture result is not a claim that the
+three-skill integration has passed.
+
 ## Charter end-state (okbay row)
 
 | Concern | End-state |
@@ -42,8 +64,8 @@ Scope: this GitHub repo **is** the Omarchy plugin (`Panel.qml`, `BarWidget.qml`,
 
 | Path | Role today | End-state | Gap |
 |------|------------|-----------|-----|
-| `contrib/setup.sh` | Builds okbayd, installs plugin QML, Hypr bind, systemd user unit | Also installs/links **curiosity-engine**, **curiosity-merge**, **okstratr** | **Not yet** — inventory only this phase |
-| Skills under `skills/` | okbay-ask / curate / desk / views | Coexist with CE/CM/okstratr skills in Omarchy skill roots | Contract TBD Phase 6 |
+| `contrib/setup.sh` | Builds okbayd, installs plugin QML, Hypr bind, systemd user unit | Makes the imported **curiosity-engine**, **curiosity-merge**, and **okstratr** skill entry points available | **Not yet** — inventory only this phase |
+| Skills under `skills/` | okbay-ask / curate / desk / views | Coexist with imported CE/CM/okstratr skills in Omarchy skill roots | Import-boundary contract and gate above |
 
 ### D. Herdr (okbay-only)
 
