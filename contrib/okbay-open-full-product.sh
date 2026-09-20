@@ -552,6 +552,50 @@ launch_nautilus() {
 
 launch_herdr() {
   log "launch herdr"
+  # Prefer foot --app-id=herdr BEFORE omarchy-launch-terminal-herdr.
+  # The Omarchy helper runs `foot ... herdr` without --app-id, so Hyprland
+  # reports class=foot title=omarchy: mac — arrange never classifies herdr.
+  local has=0
+  if command -v hyprctl >/dev/null 2>&1; then
+    if hyprctl clients -j 2>/dev/null | python3 -c '
+import json,sys
+try:
+    cs=json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+for c in cs:
+    blob=" ".join(str(x) for x in [c.get("class"),c.get("initialClass"),c.get("title"),c.get("initialTitle")]).lower()
+    cls=str(c.get("class") or "").lower()
+    title=str(c.get("title") or "").lower()
+    initial=str(c.get("initialTitle") or "").lower()
+    if cls=="herdr" or title=="herdr" or initial=="herdr" or "herdr" in blob:
+        raise SystemExit(0)
+raise SystemExit(1)
+' 2>/dev/null; then
+      has=1
+    fi
+  fi
+  if [[ "$has" -eq 1 ]]; then
+    log "herdr already mapped (app-id/title)"
+    return 0
+  fi
+  if command -v foot >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
+    if command -v uwsm-app >/dev/null 2>&1; then
+      log "herdr via uwsm-app -- foot --app-id=herdr -T Herdr"
+      nohup uwsm-app -- foot --app-id=herdr -T Herdr -e herdr >>/tmp/okbay-herdr.log 2>&1 &
+    else
+      log "herdr via foot --app-id=herdr -T Herdr"
+      nohup foot --app-id=herdr -T Herdr -e herdr >>/tmp/okbay-herdr.log 2>&1 &
+    fi
+    sleep 0.55
+    if command -v hyprctl >/dev/null 2>&1; then
+      if hyprctl clients -j 2>/dev/null | grep -qiE '"class"[[:space:]]*:[[:space:]]*"herdr"|"title"[[:space:]]*:[[:space:]]*"Herdr"'; then
+        log "herdr mapped with app-id/title"
+        return 0
+      fi
+    fi
+  fi
+  # Soft API nudge (may spawn unclassified foot — only if foot path missing)
   if command -v curl >/dev/null 2>&1; then
     curl -fsS -m 2 -X POST "${OKSTRATR_URL}/api/herdr/launch" \
       -H 'Content-Type: application/json' \
@@ -560,37 +604,46 @@ launch_herdr() {
       -H 'Content-Type: application/json' \
       -d '{"kind":"auto","drive_herdr":true}' >/dev/null 2>&1 \
     || true
+    sleep 0.35
   fi
-  sleep 0.45
-  local has=0
-  if command -v hyprctl >/dev/null 2>&1; then
-    if hyprctl clients -j 2>/dev/null | grep -qi herdr; then
-      has=1
-    fi
-  fi
-  if [[ "$has" -eq 1 ]]; then
-    log "herdr already mapped"
-    return 0
-  fi
-  # Omarchy: prefer dedicated herdr terminal launcher, then uwsm/foot --app-id=herdr
   if command -v omarchy-launch-terminal-herdr >/dev/null 2>&1; then
-    log "herdr via omarchy-launch-terminal-herdr"
+    log "herdr fallback omarchy-launch-terminal-herdr"
     nohup omarchy-launch-terminal-herdr >>/tmp/okbay-herdr.log 2>&1 &
-  elif command -v uwsm-app >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
-    log "herdr via uwsm-app -- herdr"
-    nohup uwsm-app -- herdr >>/tmp/okbay-herdr.log 2>&1 &
-  elif command -v uwsm-app >/dev/null 2>&1 && command -v foot >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
-    log "herdr via uwsm-app -- foot --app-id=herdr"
-    nohup uwsm-app -- foot --app-id=herdr -T Herdr -e herdr >>/tmp/okbay-herdr.log 2>&1 &
-  elif command -v foot >/dev/null 2>&1 && command -v herdr >/dev/null 2>&1; then
-    log "herdr via foot --app-id=herdr"
-    nohup foot --app-id=herdr -T Herdr -e herdr >>/tmp/okbay-herdr.log 2>&1 &
   elif command -v herdr >/dev/null 2>&1; then
-    log "herdr direct"
+    log "herdr direct fallback"
     nohup herdr >>/tmp/okbay-herdr.log 2>&1 &
   else
     log "herdr binary/launcher missing"
   fi
+}
+
+okstratr_client_mapped() {
+  command -v hyprctl >/dev/null 2>&1 || return 1
+  command -v python3 >/dev/null 2>&1 || return 1
+  hyprctl clients -j 2>/dev/null | python3 -c '
+import json,sys
+try:
+    cs=json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+for c in cs:
+    title=str(c.get("title") or "")
+    initial=str(c.get("initialTitle") or "")
+    cls=str(c.get("class") or "").lower()
+    initial_cls=str(c.get("initialClass") or "").lower()
+    t=(title+" "+initial).lower()
+    if t.strip() == "okstratr" or "okstratr" in t or "benjsmith.okstratr" in t:
+        raise SystemExit(0)
+    if c.get("floating") and (cls in ("qs","quickshell") or "quickshell" in cls or initial_cls in ("qs","quickshell")):
+        size=c.get("size") or [0,0]
+        try:
+            w,h=int(size[0] or 0),int(size[1] or 0)
+        except Exception:
+            w=h=0
+        if w>=400 and h>=300:
+            raise SystemExit(0)
+raise SystemExit(1)
+' 2>/dev/null
 }
 
 summon_okstratr_panel() {
@@ -600,19 +653,29 @@ summon_okstratr_panel() {
     return 0
   fi
   # Primary: panel surface (Quickshell FloatingWindow title Okstratr)
-  omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
-    || omarchy-shell shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
-    || true
-  sleep 0.4
-  # Retry once — cold Quickshell plugin load can miss the first summon
-  if command -v hyprctl >/dev/null 2>&1; then
-    if ! hyprctl clients -j 2>/dev/null | grep -qiE 'okstratr|quickshell|"class":"qs"'; then
-      log "okstratr not mapped yet; retry summon + desk surface"
-      omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 || true
-      omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"desk"}' >/dev/null 2>&1 || true
-      sleep 0.35
+  local attempt
+  for attempt in 1 2 3 4; do
+    if okstratr_client_mapped; then
+      log "okstratr already mapped"
+      return 0
     fi
-  fi
+    log "okstratr summon attempt=$attempt"
+    omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+      || omarchy-shell shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+      || true
+    sleep 0.55
+    if okstratr_client_mapped; then
+      log "okstratr mapped after panel summon"
+      return 0
+    fi
+    omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"desk"}' >/dev/null 2>&1 || true
+    sleep 0.45
+    if okstratr_client_mapped; then
+      log "okstratr mapped after desk summon"
+      return 0
+    fi
+  done
+  log "okstratr still not mapped after retries"
 }
 
 arrange_2x2() {
@@ -632,6 +695,7 @@ arrange_2x2() {
   if [[ -f "$helper" ]]; then
     # Arrange writes ARRANGE_DONE + GEO to LOG itself (avoid >>LOG double lines)
     OKBAY_FULL_PRODUCT_LOG="$LOG" WS_TARGET="$ws" OKBAY_KILL_STALE_ATLAS=1 \
+      OKBAY_ARRANGE_WAIT="${OKBAY_ARRANGE_WAIT:-22}" \
       python3 "$helper" 2>>"$LOG" || log "arrange exit=$?"
   else
     log "arrange helper missing: $helper"
@@ -646,13 +710,13 @@ log "prev workspace=$PREV_WS target workspace=$WS"
 kill_stale_fullscreen_atlas "$PREV_WS" "$WS"
 switch_workspace "$WS"
 launch_atlas_tiled "$@"
-sleep 0.45
+sleep 1.2
 launch_nautilus
-sleep 0.3
+sleep 0.35
 launch_herdr
-sleep 0.3
-summon_okstratr_panel
 sleep 0.55
+summon_okstratr_panel
+sleep 1.0
 switch_workspace "$WS"
 arrange_2x2 "$WS"
 log "full-product done ws=$WS"

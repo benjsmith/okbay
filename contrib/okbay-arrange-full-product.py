@@ -144,12 +144,29 @@ def classify(c):
             return "atlas"
     if ("atlas" in b and ("chromium" in b or "chrome" in b)):
         return "atlas"
+    # Dedicated profile ToS / pre-class: empty class, title hints Atlas launch.
+    if not cls.strip() and not initial_cls.strip():
+        tblob = f"{title} {initial}"
+        if (
+            "terms of service" in tblob
+            or "additional terms" in tblob
+            or "8766" in tblob
+            or "atlas" in tblob
+            or "127.0.0.1" in tblob
+            or "okbay" in tblob
+        ):
+            return "atlas"
 
     # Nautilus
     if "nautilus" in b or "org.gnome.nautilus" in b:
         return "nautilus"
 
-    # Herdr terminal
+    # Herdr terminal — prefer app-id=herdr / title Herdr / initialTitle Herdr
+    # (omarchy-launch-terminal-herdr often leaves class=foot title=omarchy: mac)
+    if cls == "herdr" or initial_cls == "herdr":
+        return "herdr"
+    if title == "herdr" or initial == "herdr":
+        return "herdr"
     if "herdr" in b:
         return "herdr"
 
@@ -373,7 +390,7 @@ def main():
     if os.environ.get("OKBAY_KILL_STALE_ATLAS", "1") == "1":
         kill_fullscreen_atlas_on_other_workspaces(WS)
 
-    roles = wait_roles(timeout=float(os.environ.get("OKBAY_ARRANGE_WAIT") or "14"))
+    roles = wait_roles(timeout=float(os.environ.get("OKBAY_ARRANGE_WAIT") or "22"))
     log(
         "roles",
         {k: (v.get("address"), (v.get("title") or "")[:40], class_str(v)) for k, v in roles.items()},
