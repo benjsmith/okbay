@@ -15,6 +15,8 @@ SWITCHBAY_TYPE = {
     "source": "#94346e", "sources": "#94346e",
     "note": "#6f4070", "notes": "#6f4070",
     "todo": "#9656a2", "todo-list": "#9656a2",
+    "procedure": "#5e4fa2", "procedures": "#5e4fa2",
+    "execution": "#c51b8a", "executions": "#c51b8a",
     "hub": "#6be8b3", "unclassified": "#ffffff",
     "missing": "#5a6068", "default": "#9aa0a8",
 }
@@ -39,6 +41,8 @@ KIND_TO_NAMED = {
     "source": "magenta", "sources": "magenta",
     "note": "brown", "notes": "brown",
     "todo": "bright_magenta", "todo-list": "bright_magenta",
+    "procedure": "bright_blue", "procedures": "bright_blue",
+    "execution": "magenta", "executions": "magenta",
     "hub": "accent", "unclassified": "bright_foreground",
     "missing": "muted", "default": "dark_foreground",
 }
