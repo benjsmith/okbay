@@ -56,6 +56,48 @@ def main(argv=None):
 
     priv = sub.add_parser("privacy"); priv.add_argument("path"); priv.add_argument("--json", action="store_true")
 
+    vw = sub.add_parser("viewer", help="HTML vs QML viewer mutex (charter Phase 5a)")
+    vwsub = vw.add_subparsers(dest="viewer_cmd", required=True)
+    vwsub.add_parser("status", help="Show viewer_mode / html_ui_enabled")
+    vset = vwsub.add_parser("set", help="Persist mode to ~/.config/okbay/viewer.json")
+    vset.add_argument("mode", choices=["html", "qml"])
+
+    hn = sub.add_parser(
+        "host-notify",
+        help="Receive okstratr.host_notify envelope → Herdr stub (JSON arg or stdin)",
+    )
+    hn.add_argument(
+        "envelope",
+        nargs="?",
+        help="JSON envelope string; omit to read stdin",
+    )
+    hn.add_argument("--json", action="store_true", help="Print result as JSON")
+
+    cs = sub.add_parser(
+        "core-skills",
+        help="CE + okstratr auto-start / C1 health (contract C1)",
+    )
+    cssub = cs.add_subparsers(dest="core_skills_cmd", required=True)
+    cssub.add_parser("status", help="Show ce/okstratr/wiki_build health shape")
+    cs_ensure = cssub.add_parser("ensure", help="Start CE APIs claim + okstratr serve")
+    cs_ensure.add_argument("--wait", action="store_true", help="Block until okstratr /health")
+    cs_ensure.add_argument("--no-keep-alive", action="store_true", help="Skip background supervisor")
+
+    hr = sub.add_parser(
+        "harness",
+        help="okstratr harness registry SSOT (thin client; no okbay allowlist)",
+    )
+    hrsub = hr.add_subparsers(dest="harness_cmd", required=True)
+    hrsub.add_parser("list", help="List harnesses from okstratr (GET /api/harness)")
+    hren = hrsub.add_parser("enable", help="Enable harness id")
+    hren.add_argument("id", help="Harness id (e.g. grok)")
+    hrdis = hrsub.add_parser("disable", help="Disable harness id")
+    hrdis.add_argument("id", help="Harness id")
+    hrset = hrsub.add_parser("set", help="Set registry key (e.g. harness.grok.default_model)")
+    hrset.add_argument("key")
+    hrset.add_argument("value", nargs="?", default="")
+    hrsub.add_parser("reload", help="Reload harnesses.toml on okstratr")
+
     args = p.parse_args(argv)
     if args.cmd == "setup":
         from . import paths, status, graph
@@ -130,4 +172,49 @@ def main(argv=None):
     if args.cmd == "privacy":
         from . import privacy_gate
         return _print(privacy_gate.scan_path(args.path), True)
+    if args.cmd == "viewer":
+        from . import viewer_mutex
+        if args.viewer_cmd == "status":
+            return _print(viewer_mutex.snapshot())
+        if args.viewer_cmd == "set":
+            return _print(viewer_mutex.set_mode(args.mode, source="cli"))
+    if args.cmd == "host-notify":
+        from . import host_notify
+        raw = args.envelope
+        if raw is None:
+            raw = sys.stdin.read()
+        result = host_notify.receive_json_text(raw)
+        _print(result, True)
+        return 0 if result.get("ok") else 1
+    if args.cmd == "core-skills":
+        from . import core_skills, paths
+        if args.core_skills_cmd == "status":
+            return _print(core_skills.status(paths.workspace()))
+        if args.core_skills_cmd == "ensure":
+            out = core_skills.ensure_started(
+                paths.workspace(),
+                keep_alive=not bool(args.no_keep_alive),
+                wait_okstratr=bool(args.wait),
+            )
+            _print(out)
+            return 0 if out.get("ok") else 1
+    if args.cmd == "harness":
+        from . import okstratr_harness
+        try:
+            if args.harness_cmd == "list":
+                out = okstratr_harness.list_harnesses()
+            elif args.harness_cmd == "enable":
+                out = okstratr_harness.enable_harness(args.id)
+            elif args.harness_cmd == "disable":
+                out = okstratr_harness.disable_harness(args.id)
+            elif args.harness_cmd == "set":
+                out = okstratr_harness.set_harness_value(args.key, args.value)
+            elif args.harness_cmd == "reload":
+                out = okstratr_harness.reload_harnesses()
+            else:
+                return 1
+        except okstratr_harness.OkstratrHarnessError as e:
+            _print(okstratr_harness.error_payload(e), True)
+            return 1
+        return _print(out, True)
     return 1

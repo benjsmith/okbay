@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Full-product 2x2 never float-unset (Omarchy 0.56 stick)**: live proof — float-unset when moving onto the WS dumps panes into dwindle (tall skinny tiled); recipe is close tiled Nautilus on target first, then float set → ~150ms → resize/move/move, two rounds atlas/nautilus/herdr/okstratr with ~400ms settle. Removed `windowrulev2 = fullscreen` from `okbay-atlas.conf` (fights product); open-full-product keeps float set after fs clear.
+- **Full-product 2x2 quadrant stick**: `role_needs_correct` now fails on position off by >~40px (not just size); `place_final` re-asserts float before resize/move, double-moves against Hypr float-center, pins via `hl.dsp.window.pin`; close extra Nautilus; prefer floating-on-target role pick; after correct passes settle + force-place all four from stored addresses. Never `fullscreen mode=0`.
+
+- **Full-product 2x2 arrange correct-after-done**: after `ARRANGE_DONE`, remeasure each role and re-place when width/height is off by >20% from TL/TR/BL/BR targets (`place_final` leaves floats set; never `fullscreen mode=0`). Herdr collapsed ~163px → re-float to half-pane (≥~800px); clear fs≥2 full-cover. Logs `MEASURE` / `CORRECT` / `CORRECT_OK`.
+
+- **Full-product 2x2 live fix (ToS / Herdr app-id / okstratr)**: Atlas dedicated profile now seeds `First Run` + Local State/Preferences (`require_eula: false`) and launches with `--no-first-run`; wait past Additional Terms title; fallback to default Chromium profile if still stuck. Classify empty-class windows titled Terms of Service / Atlas / 8766 / 127.0.0.1. Prefer `foot --app-id=herdr -T Herdr` before `omarchy-launch-terminal-herdr`. okstratr panel summon retries until FloatingWindow titled Okstratr maps. Longer arrange wait (22s).
+
+- **Full-product 2x2 Omarchy harden**: classify Atlas as `chrome-*atlas*` (Chromium ignores `--class=OkbayAtlas` on Wayland); keep `--class=OkbayAtlas` + dedicated Chromium profile; Herdr via `omarchy-launch-terminal-herdr` / `uwsm-app` / `foot --app-id=herdr`; okstratr panel summon retry; force `okbay viewer set html` + `mkdir ~/.local/state/okbay` before serve; never block on foreground `okbay setup` (background `&`); prefer `PYTHONPATH=~/src/okbay/src python3 -m okbay serve`; dedupe arrange log (stdout+file double-write).
+
+- **Hypr full-product arrange harden**: full-product forces `OKBAY_ATLAS_TILED=1`, kills any leftover Atlas, and **never** passes Chromium `--start-fullscreen` (relaunch if a solo fullscreen Atlas was focused); before tiling, unset Atlas float/fullscreen (`fullscreen 0`, `setfloating 0` / `togglefloating`); kill leftover fullscreen Atlas on the *previous* workspace; wait for all 4 roles; classify Quickshell FloatingWindow okstratr (title `Okstratr` / class `qs`|`quickshell`); explicit `movetoworkspace` + `resizewindowpixel`/`movewindowpixel` with monitor geometry minus top bar; `ARRANGE_DONE` + `GEO` lines → `/tmp/okbay-full-product.log`. Default `OKBAY_WORKSPACE` / Nautilus + Atlas to BioCure freeze `biocure-confirm-v1-query-5b9711895` (tip `5b9711895`, not hybrid `76142912`); ensure okbayd serves that workspace on `:8766` before Atlas opens.
+
+- **Omarchy polish (2026-09-20)**: keybind truth — Super+Shift+K full-product 2x2, Super+Ctrl+K Mac alt, Super+Shift+O okstratr-only, Super+Shift+S screenshot, Maps on **Super+Alt+S** (not Shift+M=Music). Atlas chrome: fixed-position brand actions (no workspace-chip reflow jump); animated loading ellipsis on `#status`.
+- **Hypr Super+Shift+K full product → Omarchy-like 2x2 workspace**: `contrib/okbay-open-full-product.sh` + `okbay-arrange-full-product.py` switch to next-empty (or `OKBAY_FULL_PRODUCT_WS` / `special:okbay`), ensure okstratr serve, launch Atlas TL + Nautilus TR + Herdr BL + okstratr BR — not Atlas float-fullscreen over the prior desktop. `OKBAY_ATLAS_TILED=1` skips Chromium `--start-fullscreen`. Docs note personal Super+Shift+S screenshot / Maps→Super+Alt+S (never edit `/usr/share` defaults; Shift+M=Music). Live guest path: `/home/benj/.local/bin/okbay-open-full-product.sh`.
+- **okstratr harness registry thin client**: `okbay.okstratr_harness` + `GET/POST /api/okstratr/harness*` + `okbay harness list|enable|disable|set|reload` (`X-Okstratr-Host: okbay`); status `harness_registry` pointer; docs `HERDR-AND-REGISTRY.md`.
+- **Session auto-start (C1)**: on `okbay serve`, auto-start okstratr (`:8767`) + claim CE APIs (`:8766`); `okbay core-skills status|ensure` + `GET /api/core-skills/status`; QML mutex still blocks HTML atlas host.
+- **Path-native host_notify → Herdr**: `POST /api/okstratr/host-notify` + `okbay host-notify` map okstratr envelopes to `~/.local/state/okbay/herdr-notify.jsonl` + `herdr:` stderr (contract C2).
 - **Viewer source body**: `GET /api/atlas/source` (vault path sandbox) + views-shell renders source HTML; wiki↔source history preserved.
 - **Bar / menu**: left-click Atlas launcher; right-click Library `#view=library`; menu Library entry.
 - **Hypr OkbayAtlas**: `contrib/okbay-atlas.conf` + `install-okbay-atlas-rules.sh` / setup.sh → `hyprctl reload`.
@@ -34,3 +50,5 @@
 
 - First cut of the Omarchy plugin: QML surfaces + okbayd + CLI + MCP + three skills.
 - Workspace `~/Work/okbay`, port 8766, propose→review gate, Atlas overlay, standing desks.
+
+- Omarchy 0.56: float action=set tiles floating windows; arrange uses toggle-only + proven 2x2 recipe (live green on Mac Mini).

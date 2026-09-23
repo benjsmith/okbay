@@ -56,6 +56,19 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
     root = ws or paths.workspace()
     ready = (root / "wiki").exists()
     st = state or ("ready" if ready else "setup")
+    from . import viewer_mutex
+    vm = viewer_mutex.snapshot()
+    # Cheap C1 core-skills health (no network spawn); full shape via /api/core-skills/status.
+    try:
+        from . import core_skills
+        health = core_skills.status(root)
+    except Exception:
+        health = None
+    try:
+        from . import okstratr_harness
+        harness = okstratr_harness.status_hint()
+    except Exception:
+        harness = {"ssot": "okstratr", "api": "/api/okstratr/harness"}
     return {
         "ts": time.time(),
         "state": st,
@@ -69,6 +82,10 @@ def compute(ws: Path | None = None, state: str | None = None) -> dict:
         "message": "" if ready else "Run okbay setup",
         "version": "0.1.0",
         "daemon": "python",
+        "viewer_mode": vm["viewer_mode"],
+        "html_ui_enabled": vm["html_ui_enabled"],
+        "health": health,
+        "harness_registry": harness,
     }
 
 def write(ws: Path | None = None, state: str | None = None) -> dict:

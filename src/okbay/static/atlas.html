@@ -53,9 +53,13 @@
   }
   #sidebar-header .brand {
     font-weight: 600; letter-spacing: 0.02em; color: var(--text);
-    display: flex; justify-content: space-between; align-items: baseline;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; min-height: 28px;
   }
-  #meta-counts { color: var(--text-muted); font-size: 11px; font-weight: 400; }
+  #meta-counts {
+    color: var(--text-muted); font-size: 11px; font-weight: 400;
+    min-width: 5.5rem; text-align: right; flex: 0 0 auto;
+  }
   #sidebar-search {
     width: 100%; padding: 7px 10px; border-radius: 6px;
     border: 1px solid var(--line); background: var(--bg); color: var(--text);
@@ -117,6 +121,27 @@
     pointer-events: none; max-width: min(70vw, 42rem);
   }
   #status.error { color: #cc503e; border-color: #cc503e; }
+  /* Animated ellipsis so BioCure/Atlas load does not look stuck */
+  .loading-ellipsis {
+    display: inline-block;
+    min-width: 1.15em;
+    text-align: left;
+    overflow: hidden;
+    vertical-align: bottom;
+  }
+  .is-loading .loading-ellipsis::after,
+  #status.is-loading .loading-ellipsis::after {
+    content: '...';
+    display: inline-block;
+    overflow: hidden;
+    width: 0;
+    vertical-align: bottom;
+    animation: okbay-ellipsis 1.2s steps(4, end) infinite;
+  }
+  @keyframes okbay-ellipsis {
+    0% { width: 0; }
+    100% { width: 1.15em; }
+  }
   #graph {
     position: absolute; inset: 0;
     width: 100%; height: 100%;
@@ -338,11 +363,23 @@
   }
 
 
-  /* Chrome parity: ingest / workspace / edges / help */
-  .brand-actions { display: flex; gap: 6px; align-items: center; }
-  .brand-actions .icon-btn { width: 28px; height: 28px; }
+  /* Chrome parity: ingest / workspace / help — fixed slots, no reflow on chip update */
+  .brand-actions {
+    display: flex; gap: 6px; align-items: center;
+    flex: 0 0 auto; margin-left: auto;
+  }
+  .brand-actions .icon-btn {
+    width: 28px; height: 28px; min-width: 28px; max-width: 28px;
+    flex: 0 0 28px; overflow: hidden; box-sizing: border-box;
+  }
+  /* Workspace chip button: fixed width so name never nudges + / ? */
+  #workspace-switch {
+    width: 6.75rem; min-width: 6.75rem; max-width: 6.75rem;
+    flex: 0 0 6.75rem; padding: 0 6px; justify-content: center;
+  }
   #workspace-chip {
-    max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: block; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 11px; color: var(--text-muted); font-weight: 500;
   }
   #workspace-panel {
@@ -413,8 +450,8 @@
             <span id="workspace-chip">ws</span>
           </button>
           <button id="atlas-help-btn" class="icon-btn" type="button" title="Keybindings (?)" aria-label="Keybindings help">?</button>
-          <span id="meta-counts"></span>
         </span>
+        <span id="meta-counts"></span>
       </div>
       <div class="sidebar-search-wrap">
         <input id="sidebar-search" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false"/>
@@ -439,7 +476,7 @@
     <div id="sidebar-list" role="listbox"></div>
   </aside>
   <div id="graph-pane">
-    <div id="status">Loading atlas…</div>
+    <div id="status" class="is-loading">Loading atlas<span class="loading-ellipsis" aria-hidden="true"></span></div>
     <div id="graph" aria-label="Knowledge Atlas canvas"></div>
     <!-- Controls AFTER #graph (CE DOM order) so they stack above the canvas.
          Classic/Atlas chooser stays hidden when corpus > MIN_ATLAS_PAGES (360). -->
@@ -552,11 +589,27 @@
   var handle = null;
   var ceData = null;
 
-  function setStatus(msg, isError) {
+  function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
-    statusEl.textContent = msg || '';
     statusEl.classList.toggle('error', !!isError);
+    var loading = !!isLoading && !!msg && !isError;
+    statusEl.classList.toggle('is-loading', loading);
     statusEl.style.display = msg ? '' : 'none';
+    if (!msg) {
+      statusEl.textContent = '';
+      return;
+    }
+    if (loading) {
+      var base = String(msg).replace(/[.…]+$/, '');
+      statusEl.textContent = '';
+      statusEl.appendChild(document.createTextNode(base));
+      var dots = document.createElement('span');
+      dots.className = 'loading-ellipsis';
+      dots.setAttribute('aria-hidden', 'true');
+      statusEl.appendChild(dots);
+    } else {
+      statusEl.textContent = msg;
+    }
   }
 
   function applyTheme(t) {
@@ -699,7 +752,7 @@
       return;
     }
     await loadTheme();
-    setStatus('Fetching /api/atlas/data…');
+    setStatus('Fetching /api/atlas/data', false, true);
     try {
       var res = await fetch(api + '/api/atlas/data');
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -708,6 +761,7 @@
       setStatus('Failed to load atlas data: ' + (e && e.message ? e.message : e), true);
       return;
     }
+    setStatus('Opening Atlas', false, true);
     var nodes = Array.isArray(ceData.nodes) ? ceData.nodes : [];
     var corpusSize = nodes.length || (ceData.pages ? Object.keys(ceData.pages).length : 0);
     var counts = document.getElementById('meta-counts');
