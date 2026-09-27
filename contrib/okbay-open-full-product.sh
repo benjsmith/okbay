@@ -994,12 +994,104 @@ summon_okstratr_panel() {
   launch_okstratr_chromium_observer
 }
 
-launch_okstratr_chromium_observer() {
+okstratr_chromium_process_running() {
+  local profile="$1" line
+  command -v pgrep >/dev/null 2>&1 || return 1
+  while IFS= read -r line; do
+    # Match this profile, or an explicitly named observer app.  Keep the
+    # profile check on --class so another Chromium app cannot block Okstratr.
+    if [[ "$line" == *"$profile"* ]] && {
+      [[ "$line" == *chromium-observer* ]] || [[ "$line" == *--class=Okstratr* ]];
+    }; then
+      return 0
+    fi
+    if [[ "$line" == *--app=*observer* ]]; then
+      return 0
+    fi
+  done < <(pgrep -af 'chrom(e|ium)' 2>/dev/null || true)
+  return 1
+}
+
+wait_for_okstratr_client_map() {
+  local i
+  # Chromium can take several seconds to map under uwsm; do not launch a
+  # second profile while the first observer is still coming up.
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+    sleep 0.35
+    if okstratr_client_mapped; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+dedupe_okstratr_observer_clients() {
+  command -v hyprctl >/dev/null 2>&1 || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  local target_ws="${1:-${WS:-}}" address closed=0
+  while IFS= read -r address; do
+    [[ -n "$address" ]] || continue
+    if hyprctl dispatch closewindow "address:${address}" >/dev/null 2>&1; then
+      closed=$((closed + 1))
+    fi
+  done < <(hyprctl clients -j 2>/dev/null | python3 -c '
+import json, sys
+try:
+    clients = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+target = sys.argv[1] if len(sys.argv) > 1 else ""
+
+def is_observer(c):
+    cls = str(c.get("class") or "").lower()
+    initial = str(c.get("initialClass") or "").lower()
+    blob = " ".join(str(c.get(k) or "") for k in ("class", "initialClass", "title", "initialTitle")).lower()
+    return cls == "okstratr" or initial == "okstratr" or ("observer" in blob and "chrome" in blob)
+
+obs = [c for c in clients if is_observer(c) and c.get("address")]
+if len(obs) <= 1:
+    raise SystemExit(0)
+
+def on_target(c):
+    ws = c.get("workspace") or {}
+    return target and (str(ws.get("id") or "") == target or str(ws.get("name") or "") == target)
+
+targeted = [c for c in obs if on_target(c)]
+keep_pool = targeted or obs
+# PIDs are a useful newest-window tie breaker; target workspace wins first.
+def newest(c):
+    try:
+        return int(c.get("pid") or 0)
+    except Exception:
+        return 0
+keep = max(keep_pool, key=newest).get("address")
+for c in obs:
+    if c.get("address") != keep:
+        print(c.get("address"))
+' "$target_ws")
+  [[ "$closed" -gt 0 ]] && log "okstratr duplicate closed $closed"
+}
+
+_launch_okstratr_chromium_observer_locked() {
   if okstratr_client_mapped; then
     log "okstratr already mapped before chromium fallback"
+    dedupe_okstratr_observer_clients "${WS:-}"
     return 0
   fi
   ensure_okstratr_serve
+  local profile="${HOME}/.local/share/okstratr/chromium-observer"
+  local observer_url="${OKSTRATR_URL%/}/observer/"
+  if okstratr_chromium_process_running "$profile"; then
+    log "okstratr chromium already running; waiting for map"
+    if wait_for_okstratr_client_map; then
+      log "okstratr mapped after waiting for existing chromium observer"
+      dedupe_okstratr_observer_clients "${WS:-}"
+    else
+      log "okstratr still not mapped after waiting for existing chromium observer"
+    fi
+    return 0
+  fi
+
   local chromium_bin=""
   if [[ -x /usr/lib/chromium/chromium ]]; then
     chromium_bin=/usr/lib/chromium/chromium
@@ -1009,12 +1101,10 @@ launch_okstratr_chromium_observer() {
     log "chromium missing; cannot fallback okstratr observer"
     return 0
   fi
-  local profile="${HOME}/.local/share/okstratr/chromium-observer"
   mkdir -p "$profile" 2>/dev/null || true
   # Seed First Run to avoid ToS empty-class classify miss
   mkdir -p "${profile}/Default" 2>/dev/null || true
   [[ -f "${profile}/First Run" ]] || : >"${profile}/First Run" 2>/dev/null || true
-  local observer_url="${OKSTRATR_URL%/}/observer/"
   local flags=(
     --ozone-platform=wayland
     --class=Okstratr
@@ -1033,15 +1123,28 @@ launch_okstratr_chromium_observer() {
     nohup "$chromium_bin" "${flags[@]}" \
       >/tmp/okbay-okstratr-chrome.log 2>&1 &
   fi
-  local i
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
-    sleep 0.35
-    if okstratr_client_mapped; then
-      log "okstratr mapped after chromium observer fallback"
-      return 0
-    fi
-  done
+  if wait_for_okstratr_client_map; then
+    log "okstratr mapped after chromium observer fallback"
+    dedupe_okstratr_observer_clients "${WS:-}"
+    return 0
+  fi
   log "okstratr still not mapped after chromium fallback"
+}
+
+launch_okstratr_chromium_observer() {
+  local lock="${XDG_RUNTIME_DIR:-/tmp}/okbay-okstratr-observer.lock"
+  mkdir -p "$(dirname "$lock")" 2>/dev/null || true
+  if command -v flock >/dev/null 2>&1; then
+    # Hold the lock across the process check, spawn, and map wait. This makes
+    # overlapping full-product invocations single-flight.
+    (
+      flock 9
+      _launch_okstratr_chromium_observer_locked
+    ) 9>"$lock"
+    return $?
+  fi
+  log "flock missing; running okstratr observer fallback unlocked"
+  _launch_okstratr_chromium_observer_locked
 }
 
 arrange_2x2() {
@@ -1085,6 +1188,8 @@ ensure_herdr_slash_ready
 sleep 0.35
 summon_okstratr_panel
 sleep 1.0
+# Final single-role guard before arrange, including the already-mapped path.
+dedupe_okstratr_observer_clients "$WS"
 switch_workspace "$WS"
 arrange_2x2 "$WS"
 log "full-product done ws=$WS"

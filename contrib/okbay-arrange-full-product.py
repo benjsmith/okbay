@@ -57,6 +57,41 @@ def role_of(c):
         return "atlas"
     return None
 
+def close_duplicate_okstratr_observers(ws: int) -> None:
+    """Keep one Chromium observer, preferring one already on the target WS."""
+    obs = []
+    for c in clients():
+        cls = str(c.get("class") or "").lower()
+        initial = str(c.get("initialClass") or "").lower()
+        blob = " ".join(str(c.get(k) or "") for k in ("class", "initialClass", "title", "initialTitle")).lower()
+        if c.get("address") and (
+            cls == "okstratr"
+            or initial == "okstratr"
+            or ("observer" in blob and "chrome" in blob)
+        ):
+            obs.append(c)
+    if len(obs) <= 1:
+        return
+
+    targeted = [c for c in obs if int((c.get("workspace") or {}).get("id") or 0) == ws]
+    keep_pool = targeted or obs
+    def newest(c):
+        try:
+            return int(c.get("pid") or 0)
+        except (TypeError, ValueError):
+            return 0
+    keep = max(keep_pool, key=newest).get("address")
+    closed = 0
+    for c in obs:
+        addr = c.get("address")
+        if addr == keep:
+            continue
+        dsp(f'hl.dsp.window.close({{ window = "address:{addr}" }})')
+        closed += 1
+    if closed:
+        time.sleep(0.2)
+        log("okstratr duplicate closed", closed)
+
 def pick_roles(ws: int):
     by = {}
     for c in clients():
@@ -137,6 +172,7 @@ def main():
     }
     log("monitor", {"W": W, "H": H, "bar": bar, "tw": tw, "th": th}, "ws", WS)
     dsp(f'hl.dsp.focus({{ workspace = "{WS}" }})')
+    close_duplicate_okstratr_observers(WS)
 
     roles = pick_roles(WS)
     if len(roles) < 4:
