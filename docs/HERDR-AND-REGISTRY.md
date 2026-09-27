@@ -107,3 +107,8 @@ C1 shape: ``{ "ce": {...}, "okstratr": {...}, "wiki_build": {...} }``. Also embe
 
 Env overrides: ``OKBAY_OKSTRATR_UPSTREAM``, ``OKBAY_OKSTRATR_BIN``, ``OKBAY_CE_UPSTREAM``.
 
+## Workspace agent cwd (not the code repo)
+
+Full-product and okstratr **Open in Herdr** seat agents on the active/selected
+okbay workspace path (BioCure tip under `Workspaces/`), never `/mnt/mac/okbay`.
+See okstratr `docs/DESK-KERNEL.md` § Open in Herdr.

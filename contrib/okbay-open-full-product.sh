@@ -24,7 +24,7 @@
 # Env knobs:
 #   OKBAY_FULL_PRODUCT_WS   workspace target: "next-empty" (default), a number,
 #                           or "special:okbay"
-#   OKBAY_WORKSPACE         wiki/vault root (default: BioCure freeze tip 5b9711895)
+#   OKBAY_WORKSPACE         wiki/vault root (default: BioCure membership tip 7074bbec6)
 #   OKSTRATR_URL            default http://127.0.0.1:8767
 #   OKBAY_ATLAS_URL         Atlas URL for the TL pane
 set -u
@@ -65,27 +65,145 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   log "HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE"
 fi
 
-# BioCure freeze tip 5b9711895 (not hybrid 76142912). Guest + host well-known paths.
-BIOCURE_NAME="biocure-confirm-v1-query-5b9711895"
+# BioCure membership tip 7074bbec6 (fallback confirm-v1 5b9711895; not hybrid 76142912). Guest + host well-known paths.
+# Active BioCure tip (membership) preferred; confirm-v1 remains a fallback tip.
+BIOCURE_NAME="biocure-membership-7074bbec6"
+BIOCURE_FALLBACK_NAME="biocure-confirm-v1-query-5b9711895"
+
+# True when path is the okbay *code* repo — never seat Herdr agents there.
+is_okbay_code_repo() {
+  local p="${1:-}"
+  [[ -n "$p" && -d "$p" ]] || return 1
+  local base
+  base="$(basename -- "$p")"
+  if [[ "$base" == "okbay" ]]; then
+    local hits=0
+    [[ -f "$p/Cargo.toml" ]] && hits=$((hits + 1))
+    [[ -d "$p/contrib" ]] && hits=$((hits + 1))
+    [[ -d "$p/crates" ]] && hits=$((hits + 1))
+    [[ -d "$p/skills" ]] && hits=$((hits + 1))
+    [[ -f "$p/Panel.qml" ]] && hits=$((hits + 1))
+    [[ "$hits" -ge 2 ]] && return 0
+  fi
+  case "$p" in
+    /mnt/mac/okbay|${HOME}/Work/okbay|${HOME}/Dev/okbay|${HOME}/src/okbay) return 0 ;;
+  esac
+  local resolved
+  resolved="$(readlink -f -- "$p" 2>/dev/null || printf '%s' "$p")"
+  case "$resolved" in
+    /mnt/mac/okbay) return 0 ;;
+  esac
+  return 1
+}
+
 resolve_biocure_workspace() {
-  local cand
-  for cand in \
-    "${OKBAY_WORKSPACE:-}" \
-    "/mnt/mac/Workspaces/${BIOCURE_NAME}" \
-    "${HOME}/Workspaces/${BIOCURE_NAME}" \
-    "${HOME}/Work/Workspaces/${BIOCURE_NAME}" \
-    "${HOME}/Work/${BIOCURE_NAME}"
-  do
-    [[ -n "$cand" && -d "$cand" ]] || continue
-    # Prefer a real workspace root (wiki/ or vault/ or .curator/)
-    if [[ -d "$cand/wiki" || -d "$cand/vault" || -d "$cand/.curator" || -d "$cand/.okbay" ]]; then
+  local cand name
+  for name in "$BIOCURE_NAME" "$BIOCURE_FALLBACK_NAME"; do
+    for cand in \
+      "${OKBAY_WORKSPACE:-}" \
+      "/mnt/mac/Workspaces/${name}" \
+      "${HOME}/Workspaces/${name}" \
+      "${HOME}/Work/Workspaces/${name}" \
+      "${HOME}/Work/${name}"
+    do
+      [[ -n "$cand" && -d "$cand" ]] || continue
+      is_okbay_code_repo "$cand" && continue
+      if [[ -d "$cand/wiki" || -d "$cand/vault" || -d "$cand/.curator" || -d "$cand/.okbay" ]]; then
+        printf '%s\n' "$cand"
+        return 0
+      fi
+      printf '%s\n' "$cand"
+      return 0
+    done
+  done
+  return 1
+}
+
+# Resolve Herdr agent cwd: active/selected okbay workspace, never code repo.
+resolve_herdr_agent_cwd() {
+  local cand=""
+  if [[ -n "${OKBAY_WORKSPACE:-}" && -d "${OKBAY_WORKSPACE}" ]] && ! is_okbay_code_repo "$OKBAY_WORKSPACE"; then
+    printf '%s\n' "$OKBAY_WORKSPACE"
+    return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    cand="$(
+      PYTHONPATH="/mnt/mac/okbay/src:${HOME}/Dev/okbay/src:${HOME}/src/okbay/src:${PYTHONPATH:-}" \
+      python3 - <<'PY' 2>/dev/null || true
+import json, urllib.request
+from pathlib import Path
+
+def looks_repo(p: Path) -> bool:
+    try:
+        p = p.expanduser().resolve()
+    except OSError:
+        return False
+    if p.name == "okbay":
+        hits = sum(1 for m in ("Cargo.toml", "contrib", "crates", "skills", "Panel.qml") if (p / m).exists())
+        if hits >= 2:
+            return True
+    for tip in ("/mnt/mac/okbay", str(Path.home() / "Work" / "okbay"), str(Path.home() / "Dev" / "okbay")):
+        try:
+            if p == Path(tip).expanduser().resolve():
+                return True
+        except OSError:
+            pass
+    return False
+
+candidates = []
+try:
+    from okbay.workroot import list_workspaces
+    data = list_workspaces()
+except Exception:
+    data = None
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8766/api/workspace/list", timeout=0.6) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception:
+        data = None
+if isinstance(data, dict):
+    named = data.get("workspaces") or {}
+    active = data.get("active") or ""
+    if isinstance(named, dict):
+        if active and active in named:
+            candidates.append(str(named[active]))
+        for k, v in named.items():
+            if k != "okbay":
+                candidates.append(str(v))
+    current = data.get("current")
+    if current:
+        candidates.append(str(current))
+
+for tip in (
+    "/mnt/mac/Workspaces/biocure-membership-7074bbec6",
+    str(Path.home() / "Work" / "Workspaces" / "biocure-membership-7074bbec6"),
+    "/mnt/mac/Workspaces/biocure-confirm-v1-query-5b9711895",
+    str(Path.home() / "Work" / "Workspaces" / "biocure-confirm-v1-query-5b9711895"),
+):
+    candidates.append(tip)
+
+for raw in candidates:
+    p = Path(raw).expanduser()
+    if not p.is_dir():
+        continue
+    if looks_repo(p):
+        continue
+    print(p.resolve())
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+    )"
+    if [[ -n "$cand" && -d "$cand" ]] && ! is_okbay_code_repo "$cand"; then
       printf '%s\n' "$cand"
       return 0
     fi
-    printf '%s\n' "$cand"
-    return 0
-  done
-  # Last resort: leave empty so caller can fall back
+  fi
+  if cand="$(resolve_biocure_workspace 2>/dev/null)"; then
+    if [[ -n "$cand" && -d "$cand" ]] && ! is_okbay_code_repo "$cand"; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  fi
   return 1
 }
 
@@ -565,22 +683,22 @@ launch_nautilus() {
 
 
 ensure_herdr_slash_ready() {
-  # After Herdr UI is up: sync seat_cwd to active OKBay workspace and ensure
-  # at least one agent pane is running so slash skills (/okstratr, aliases) work.
+  # After Herdr UI is up: sync seat_cwd to active OKBay *workspace* and ensure
+  # at least one agent pane runs there so slash skills (/okstratr, aliases) work.
   # Bare `foot -e herdr` only attaches the TUI — it does not start Grok.
+  # NEVER seat on the okbay code repo (/mnt/mac/okbay, ~/Dev/okbay, …).
   log "ensure herdr slash-ready agent"
   command -v herdr >/dev/null 2>&1 || { log "herdr missing; skip agent seat"; return 0; }
 
-  local cwd="${OKBAY_WORKSPACE:-}"
+  local cwd=""
+  cwd="$(resolve_herdr_agent_cwd 2>/dev/null || true)"
   if [[ -z "$cwd" || ! -d "$cwd" ]]; then
-    cwd="$(resolve_biocure_workspace 2>/dev/null || true)"
+    log "no registered workspace cwd for herdr agent; refusing okbay code-repo fallback"
+    return 0
   fi
-  if [[ -z "$cwd" || ! -d "$cwd" ]]; then
-    if [[ -d /mnt/mac/okbay ]]; then
-      cwd="/mnt/mac/okbay"
-    else
-      cwd="${HOME}"
-    fi
+  if is_okbay_code_repo "$cwd"; then
+    log "refusing herdr seat on okbay code repo: $cwd"
+    return 0
   fi
   log "seat_cwd candidate=$cwd"
 
@@ -613,27 +731,44 @@ PY
     return 0
   fi
 
-  local has_agent=0
-  if printf '%s' "$agents_json" | python3 -c '
-import json,sys
-raw=sys.stdin.read()
+  # Prefer an existing agent already rooted at this workspace cwd.
+  local has_agent_at_cwd=0
+  if printf '%s' "$agents_json" | OKBAY_HERDR_WANT_CWD="$cwd" python3 -c '
+import json, os, sys
+from pathlib import Path
+want = Path(os.environ["OKBAY_HERDR_WANT_CWD"]).resolve()
+raw = sys.stdin.read()
 try:
-    data=json.loads(raw)
+    data = json.loads(raw)
 except Exception:
     raise SystemExit(1)
-agents=(data.get("result") or data).get("agents") or []
-raise SystemExit(0 if agents else 1)
+agents = (data.get("result") or data).get("agents") or []
+for a in agents:
+    for key in ("cwd", "foreground_cwd"):
+        c = a.get(key) or ""
+        if not c:
+            continue
+        try:
+            if Path(c).resolve() == want:
+                raise SystemExit(0)
+        except OSError:
+            if c.rstrip("/") == str(want).rstrip("/"):
+                raise SystemExit(0)
+raise SystemExit(1)
 ' 2>/dev/null; then
-    has_agent=1
+    has_agent_at_cwd=1
   fi
-  if [[ "$has_agent" -eq 1 ]]; then
-    log "herdr agent already present (slash skills from ~/.agents/skills incl. okstratr)"
+  if [[ "$has_agent_at_cwd" -eq 1 ]]; then
+    log "herdr agent already present at workspace cwd=$cwd"
     return 0
   fi
 
-  log "no herdr agent; creating workspace cwd=$cwd and starting grok"
+  local label
+  label="$(basename -- "$cwd")"
+  label="${label:0:48}"
+  log "no herdr agent at workspace; creating workspace cwd=$cwd label=$label and starting grok"
   local create_out pane_id=""
-  create_out="$(herdr workspace create --cwd "$cwd" --label "okbay" --focus 2>&1)" || true
+  create_out="$(herdr workspace create --cwd "$cwd" --label "$label" --focus 2>&1)" || true
   printf '%s\n' "$create_out" >>"$LOG"
   pane_id="$(printf '%s' "$create_out" | python3 -c '
 import json,sys
@@ -679,8 +814,28 @@ if panes:
     log "could not resolve shell pane for agent start"
     return 0
   fi
-  log "herdr agent start grok pane=$pane_id"
-  herdr agent start grok --kind grok --pane "$pane_id" >>"$LOG" 2>&1 || log "herdr agent start failed"
+  log "herdr agent start grok pane=$pane_id cwd=$cwd"
+  if ! herdr agent start grok --kind grok --pane "$pane_id" >>"$LOG" 2>&1; then
+    log "herdr agent start grok failed; trying seated fallback via okstratr"
+    PYTHONPATH="$pypath" OKSTRATR_HERDR_PANE="$pane_id" OKSTRATR_SEAT_CWD="$cwd" python3 - <<'PY' >>"$LOG" 2>&1 || true
+import os, sys
+sys.path[:0] = [p for p in os.environ.get("PYTHONPATH", "").split(":") if p]
+try:
+    from okstratr import herdr as h
+    seat = h.resolve_seat_kind(node_id="full-product", role="worker", prefer_harness="grok", require_installed=True)
+    kind = (seat.get("herdr_kind") or "grok").strip() or "grok"
+    pane = os.environ["OKSTRATR_HERDR_PANE"]
+    name = kind
+    bin_path = h.herdr_bin()
+    if not bin_path:
+        print({"ok": False, "error": "no herdr"})
+    else:
+        env = h.merge_user_session_env()
+        print(h._run_cmd([bin_path, "agent", "start", name, "--kind", kind, "--pane", pane], timeout=60.0, env=env))
+except Exception as e:
+    print({"ok": False, "error": str(e)})
+PY
+  fi
 }
 
 launch_herdr() {
