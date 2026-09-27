@@ -643,10 +643,15 @@ try:
 except Exception:
     raise SystemExit(0)
 res=data.get("result") or data
+if not isinstance(res, dict):
+    raise SystemExit(0)
+rp=res.get("root_pane") or {}
+if isinstance(rp, dict) and rp.get("pane_id"):
+    print(rp["pane_id"]); raise SystemExit(0)
 for key in ("pane_id","active_pane_id"):
-    if isinstance(res, dict) and res.get(key):
+    if res.get(key):
         print(res[key]); raise SystemExit(0)
-ws=res.get("workspace") if isinstance(res, dict) else None
+ws=res.get("workspace")
 if isinstance(ws, dict):
     for key in ("pane_id","active_pane_id"):
         if ws.get(key):
