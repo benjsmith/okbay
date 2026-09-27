@@ -689,6 +689,23 @@
     if (classic && list.length && typeof classic.focus === 'function') classic.focus(list[0]);
   }
 
+  function clearHighlights() {
+    if (handle && handle.engine) {
+      try {
+        if (typeof handle.engine.select === 'function') handle.engine.select([], 'replace');
+        if (typeof handle.engine.clearFocus === 'function') handle.engine.clearFocus();
+        if (typeof handle.clearHover === 'function') handle.clearHover();
+      } catch (e) {}
+    }
+    var classic = window.__okbayClassicHandle;
+    if (classic && typeof classic.clearFocus === 'function') classic.clearFocus();
+  }
+
+  // Clear graph state when focus moves to chrome, the sidebar, or a modal.
+  document.addEventListener('pointerdown', function (ev) {
+    if (graphEl && !graphEl.contains(ev.target)) clearHighlights();
+  }, true);
+
   function toastFocus(id) {
     if (!id) return;
     setStatus('Focused · ' + id);
@@ -705,6 +722,7 @@
   function openPage(id, opts) {
     opts = opts || {};
     if (!id) return;
+    clearHighlights();
     OkbayAtlasChrome.Sidebar.setActive(id);
     focusInAtlas(id);
     toastFocus(id);
@@ -727,6 +745,7 @@
       var m = h.match(/(?:^#|&)page=([^&]+)/);
       if (m) {
         var pageId = decodeURIComponent(m[1]);
+        clearHighlights();
         OkbayAtlasChrome.Sidebar.setActive(pageId);
         focusInAtlas(pageId);
       }
@@ -735,6 +754,7 @@
     var m2 = location.hash.match(/^#page=([^&]+)$/);
     if (!m2) return;
     var pageId2 = decodeURIComponent(m2[1]);
+    clearHighlights();
     OkbayAtlasChrome.Sidebar.setActive(pageId2);
     focusInAtlas(pageId2);
     toastFocus(pageId2);
