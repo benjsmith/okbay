@@ -563,6 +563,121 @@ launch_nautilus() {
   fi
 }
 
+
+ensure_herdr_slash_ready() {
+  # After Herdr UI is up: sync seat_cwd to active OKBay workspace and ensure
+  # at least one agent pane is running so slash skills (/okstratr, aliases) work.
+  # Bare `foot -e herdr` only attaches the TUI — it does not start Grok.
+  log "ensure herdr slash-ready agent"
+  command -v herdr >/dev/null 2>&1 || { log "herdr missing; skip agent seat"; return 0; }
+
+  local cwd="${OKBAY_WORKSPACE:-}"
+  if [[ -z "$cwd" || ! -d "$cwd" ]]; then
+    cwd="$(resolve_biocure_workspace 2>/dev/null || true)"
+  fi
+  if [[ -z "$cwd" || ! -d "$cwd" ]]; then
+    if [[ -d /mnt/mac/okbay ]]; then
+      cwd="/mnt/mac/okbay"
+    else
+      cwd="${HOME}"
+    fi
+  fi
+  log "seat_cwd candidate=$cwd"
+
+  # Sync okstratr operating cwd when package is importable.
+  local pypath="${PYTHONPATH:-}"
+  [[ -d /mnt/mac/okstratr/src ]] && pypath="/mnt/mac/okstratr/src:${pypath}"
+  [[ -d "${HOME}/Dev/okstratr/src" ]] && pypath="${HOME}/Dev/okstratr/src:${pypath}"
+  [[ -d "${HOME}/src/okstratr/src" ]] && pypath="${HOME}/src/okstratr/src:${pypath}"
+  if [[ -d "$cwd" ]]; then
+    PYTHONPATH="$pypath" OKSTRATR_SEAT_CWD="$cwd" python3 - <<'PY' >>"$LOG" 2>&1 || true
+import os, sys
+sys.path[:0] = [p for p in os.environ.get("PYTHONPATH", "").split(":") if p]
+try:
+    from okstratr.workspace import set_cwd
+    print(set_cwd(os.environ["OKSTRATR_SEAT_CWD"]))
+except Exception as e:
+    print({"ok": False, "error": str(e)})
+PY
+  fi
+
+  local i agents_json=""
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    if agents_json="$(herdr agent list 2>/dev/null)"; then
+      break
+    fi
+    sleep 0.35
+  done
+  if [[ -z "$agents_json" ]]; then
+    log "herdr agent list unavailable; skip"
+    return 0
+  fi
+
+  local has_agent=0
+  if printf '%s' "$agents_json" | python3 -c '
+import json,sys
+raw=sys.stdin.read()
+try:
+    data=json.loads(raw)
+except Exception:
+    raise SystemExit(1)
+agents=(data.get("result") or data).get("agents") or []
+raise SystemExit(0 if agents else 1)
+' 2>/dev/null; then
+    has_agent=1
+  fi
+  if [[ "$has_agent" -eq 1 ]]; then
+    log "herdr agent already present (slash skills from ~/.agents/skills incl. okstratr)"
+    return 0
+  fi
+
+  log "no herdr agent; creating workspace cwd=$cwd and starting grok"
+  local create_out pane_id=""
+  create_out="$(herdr workspace create --cwd "$cwd" --label "okbay" --focus 2>&1)" || true
+  printf '%s\n' "$create_out" >>"$LOG"
+  pane_id="$(printf '%s' "$create_out" | python3 -c '
+import json,sys
+raw=sys.stdin.read()
+try:
+    data=json.loads(raw)
+except Exception:
+    raise SystemExit(0)
+res=data.get("result") or data
+for key in ("pane_id","active_pane_id"):
+    if isinstance(res, dict) and res.get(key):
+        print(res[key]); raise SystemExit(0)
+ws=res.get("workspace") if isinstance(res, dict) else None
+if isinstance(ws, dict):
+    for key in ("pane_id","active_pane_id"):
+        if ws.get(key):
+            print(ws[key]); raise SystemExit(0)
+' 2>/dev/null || true)"
+  if [[ -z "$pane_id" ]]; then
+    pane_id="$(herdr pane list 2>/dev/null | python3 -c '
+import json,sys
+data=json.loads(sys.stdin.read())
+panes=(data.get("result") or data).get("panes") or []
+for p in panes:
+    if p.get("focused") and not p.get("agent"):
+        print(p["pane_id"]); raise SystemExit(0)
+for p in panes:
+    if not p.get("agent"):
+        print(p["pane_id"]); raise SystemExit(0)
+for p in panes:
+    if p.get("focused"):
+        print(p["pane_id"]); raise SystemExit(0)
+if panes:
+    print(panes[0]["pane_id"])
+' 2>/dev/null || true)"
+  fi
+  if [[ -z "$pane_id" ]]; then
+    log "could not resolve shell pane for agent start"
+    return 0
+  fi
+  log "herdr agent start grok pane=$pane_id"
+  herdr agent start grok --kind grok --pane "$pane_id" >>"$LOG" 2>&1 || log "herdr agent start failed"
+}
+
 launch_herdr() {
   log "launch herdr"
   # Prefer foot --app-id=herdr BEFORE omarchy-launch-terminal-herdr.
@@ -728,6 +843,8 @@ launch_nautilus
 sleep 0.35
 launch_herdr
 sleep 0.55
+ensure_herdr_slash_ready
+sleep 0.35
 summon_okstratr_panel
 sleep 1.0
 switch_workspace "$WS"
