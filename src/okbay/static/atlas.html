@@ -690,11 +690,15 @@
   }
 
   function clearHighlights() {
-    if (handle && handle.engine) {
+    if (handle) {
       try {
-        if (typeof handle.engine.select === 'function') handle.engine.select([], 'replace');
-        if (typeof handle.engine.clearFocus === 'function') handle.engine.clearFocus();
-        if (typeof handle.clearHover === 'function') handle.clearHover();
+        if (typeof handle.clearHighlights === 'function') {
+          handle.clearHighlights();
+        } else if (handle.engine) {
+          if (typeof handle.engine.select === 'function') handle.engine.select([], 'replace');
+          if (typeof handle.engine.clearFocus === 'function') handle.engine.clearFocus();
+          if (typeof handle.clearHover === 'function') handle.clearHover();
+        }
       } catch (e) {}
     }
     var classic = window.__okbayClassicHandle;
@@ -705,6 +709,13 @@
   document.addEventListener('pointerdown', function (ev) {
     if (graphEl && !graphEl.contains(ev.target)) clearHighlights();
   }, true);
+  // Pointer left the graph host entirely (into chrome / off-window).
+  if (graphEl && !graphEl.dataset.clearLeaveBound) {
+    graphEl.dataset.clearLeaveBound = '1';
+    graphEl.addEventListener('pointerleave', function () {
+      clearHighlights();
+    });
+  }
 
   function toastFocus(id) {
     if (!id) return;
