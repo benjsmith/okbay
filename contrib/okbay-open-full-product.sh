@@ -920,7 +920,14 @@ for c in cs:
     cls=str(c.get("class") or "").lower()
     initial_cls=str(c.get("initialClass") or "").lower()
     t=(title+" "+initial).lower()
+    blob=" ".join([cls, initial_cls, t])
+    # QML FloatingWindow title Okstratr / plugin id
     if t.strip() == "okstratr" or "okstratr" in t or "benjsmith.okstratr" in t:
+        raise SystemExit(0)
+    # Chromium --app observer fallback (class Okstratr or chrome-…observer…)
+    if cls == "okstratr" or initial_cls == "okstratr":
+        raise SystemExit(0)
+    if "observer" in blob and ("chrome" in blob or "okstratr" in blob or "8767" in blob):
         raise SystemExit(0)
     if c.get("floating") and (cls in ("qs","quickshell") or "quickshell" in cls or initial_cls in ("qs","quickshell")):
         size=c.get("size") or [0,0]
@@ -936,34 +943,105 @@ raise SystemExit(1)
 
 summon_okstratr_panel() {
   log "summon okstratr panel"
-  if ! command -v omarchy-shell >/dev/null 2>&1; then
-    log "omarchy-shell missing; cannot summon okstratr"
+  ensure_okstratr_serve
+
+  if okstratr_client_mapped; then
+    log "okstratr already mapped"
     return 0
   fi
-  # Primary: panel surface (Quickshell FloatingWindow title Okstratr)
-  local attempt
-  for attempt in 1 2 3 4; do
-    if okstratr_client_mapped; then
-      log "okstratr already mapped"
-      return 0
-    fi
-    log "okstratr summon attempt=$attempt"
-    omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
-      || omarchy-shell shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+
+  if command -v omarchy-shell >/dev/null 2>&1; then
+    # Primary: panel surface (Quickshell FloatingWindow title Okstratr)
+    local attempt
+    for attempt in 1 2 3 4; do
+      if okstratr_client_mapped; then
+        log "okstratr already mapped"
+        return 0
+      fi
+      log "okstratr summon attempt=$attempt"
+      omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+        || omarchy-shell shell summon benjsmith.okstratr '{"surface":"panel"}' >/dev/null 2>&1 \
+        || true
+      sleep 0.55
+      if okstratr_client_mapped; then
+        log "okstratr mapped after panel summon"
+        return 0
+      fi
+      omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"desk"}' >/dev/null 2>&1 || true
+      sleep 0.45
+      if okstratr_client_mapped; then
+        log "okstratr mapped after desk summon"
+        return 0
+      fi
+    done
+    log "okstratr still not mapped after QML summon retries"
+
+    # One open call before Chromium fallback (may map a stuck panel)
+    log "okstratr shell call open once"
+    omarchy-shell -q shell call benjsmith.okstratr open '{}' >/dev/null 2>&1 \
+      || omarchy-shell shell call benjsmith.okstratr open >/dev/null 2>&1 \
       || true
     sleep 0.55
     if okstratr_client_mapped; then
-      log "okstratr mapped after panel summon"
+      log "okstratr mapped after shell call open"
       return 0
     fi
-    omarchy-shell -q shell summon benjsmith.okstratr '{"surface":"desk"}' >/dev/null 2>&1 || true
-    sleep 0.45
+  else
+    log "omarchy-shell missing; skip QML summon"
+  fi
+
+  # Fallback: Chromium --app observer (same flag pattern as Atlas tiled)
+  launch_okstratr_chromium_observer
+}
+
+launch_okstratr_chromium_observer() {
+  if okstratr_client_mapped; then
+    log "okstratr already mapped before chromium fallback"
+    return 0
+  fi
+  ensure_okstratr_serve
+  local chromium_bin=""
+  if [[ -x /usr/lib/chromium/chromium ]]; then
+    chromium_bin=/usr/lib/chromium/chromium
+  elif command -v chromium >/dev/null 2>&1; then
+    chromium_bin="$(command -v chromium)"
+  else
+    log "chromium missing; cannot fallback okstratr observer"
+    return 0
+  fi
+  local profile="${HOME}/.local/share/okstratr/chromium-observer"
+  mkdir -p "$profile" 2>/dev/null || true
+  # Seed First Run to avoid ToS empty-class classify miss
+  mkdir -p "${profile}/Default" 2>/dev/null || true
+  [[ -f "${profile}/First Run" ]] || : >"${profile}/First Run" 2>/dev/null || true
+  local observer_url="${OKSTRATR_URL%/}/observer/"
+  local flags=(
+    --ozone-platform=wayland
+    --class=Okstratr
+    --name=Okstratr
+    --no-first-run
+    --no-default-browser-check
+    --disable-features=TranslateUI
+    --app="${observer_url}"
+    --user-data-dir="${profile}"
+  )
+  log "okstratr chromium observer fallback bin=$chromium_bin url=$observer_url"
+  if command -v uwsm-app >/dev/null 2>&1; then
+    nohup uwsm-app -- "$chromium_bin" "${flags[@]}" \
+      >/tmp/okbay-okstratr-chrome.log 2>&1 &
+  else
+    nohup "$chromium_bin" "${flags[@]}" \
+      >/tmp/okbay-okstratr-chrome.log 2>&1 &
+  fi
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    sleep 0.35
     if okstratr_client_mapped; then
-      log "okstratr mapped after desk summon"
+      log "okstratr mapped after chromium observer fallback"
       return 0
     fi
   done
-  log "okstratr still not mapped after retries"
+  log "okstratr still not mapped after chromium fallback"
 }
 
 arrange_2x2() {

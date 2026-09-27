@@ -32,14 +32,29 @@ def clients():
 def role_of(c):
     b = " ".join(str(c.get(k) or "") for k in ("class", "initialClass", "title", "initialTitle")).lower()
     cls = str(c.get("class") or "").lower()
-    if "okbayatlas" in b or (cls.startswith("chrome-") and ("atlas" in b or "8766" in b or "127.0.0.1" in b)):
-        return "atlas"
+    initial_cls = str(c.get("initialClass") or "").lower()
+    title = str(c.get("title") or "").lower()
+    # okstratr BEFORE atlas chrome heuristic — observer app is chrome-127.0.0.1__observer_*
+    if (
+        "okstratr" in b
+        or "observer" in b
+        or cls == "okstratr"
+        or initial_cls == "okstratr"
+        or title == "okstratr"
+    ):
+        return "okstratr"
     if "nautilus" in b:
         return "nautilus"
-    if cls == "herdr" or "herdr" == str(c.get("title") or "").lower():
+    if cls == "herdr" or "herdr" == title:
         return "herdr"
-    if "okstratr" in str(c.get("title") or "").lower():
-        return "okstratr"
+    # Atlas: okbayatlas / 8766/atlas / atlas in chrome title — NOT bare 127.0.0.1
+    if (
+        "okbayatlas" in b
+        or "8766/atlas" in b
+        or (cls.startswith("chrome-") and ("atlas" in b or "8766" in b))
+        or ("atlas" in b and ("chrome" in b or "chromium" in b))
+    ):
+        return "atlas"
     return None
 
 def pick_roles(ws: int):
