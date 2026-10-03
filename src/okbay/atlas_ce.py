@@ -38,6 +38,10 @@ _TYPE_CANONICAL = {
     "todo-list": "todo-list",
     "project": "project",
     "projects": "project",
+    "procedure": "procedure",
+    "procedures": "procedure",
+    "execution": "execution",
+    "executions": "execution",
     "hub": "hub",
     "missing": "missing",
     "unclassified": "unclassified",
@@ -57,6 +61,8 @@ _PREFIX_TO_TYPE = {
     "note": "note",
     "todo": "todo-list",
     "proj": "project",
+    "proc": "procedure",
+    "exec": "execution",
 }
 
 
