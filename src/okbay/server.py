@@ -5,7 +5,7 @@ import mimetypes
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse, unquote
-from . import __version__, atlas_ce, desks, graph, ingest, locate, paths, reviews, search, status, theme, views, wiki
+from . import __version__, atlas_ce, core_skills, desks, graph, host_notify, ingest, locate, okstratr_harness, paths, reviews, search, status, theme, viewer_mutex, views, wiki
 
 _STATIC_ROOT = Path(__file__).resolve().parent / "static"
 
@@ -73,6 +73,12 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = parse_qs(u.query)
         path = u.path
+        # Charter #3: QML active ⇒ HTML atlas /views hosts off (JSON API stays).
+        if viewer_mutex.should_block_html_ui(path):
+            accept = (self.headers.get("Accept") or "").lower()
+            if "application/json" in accept:
+                return self._json(viewer_mutex.blocked_payload(path), 409)
+            return self._html(viewer_mutex.blocked_html_stub(path), 409)
         if path in ("/", "/atlas"):
             return self._html(_atlas_html())
         # Vendor + other atlas static assets (knowledge-atlas.js, fuse, …).
@@ -87,6 +93,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"ok": True, "version": __version__, "daemon": "python"})
         if path == "/api/status":
             return self._json(status.snapshot())
+        if path == "/api/core-skills/status":
+            return self._json(core_skills.status(paths.workspace()))
+        if path == "/api/okstratr/harness":
+            try:
+                return self._json(okstratr_harness.list_harnesses())
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/viewer":
+            return self._json(viewer_mutex.snapshot())
         if path in ("/api/graph", "/graph"):
             return self._json(graph.load())
         # CE Atlas data bridge (CuriosityDataSource / CEData shape). See atlas_ce.py.
@@ -181,6 +196,44 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = self._body()
         path = urlparse(self.path).path
+        if path == "/api/okstratr/host-notify":
+            result = host_notify.receive(body)
+            code = 200 if result.get("ok") else 400
+            return self._json(result, code)
+        if path == "/api/okstratr/harness/enable":
+            hid = str(body.get("id") or body.get("harness") or "").strip()
+            try:
+                return self._json(okstratr_harness.enable_harness(hid))
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/okstratr/harness/disable":
+            hid = str(body.get("id") or body.get("harness") or "").strip()
+            try:
+                return self._json(okstratr_harness.disable_harness(hid))
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/okstratr/harness/set":
+            key = str(body.get("key") or "").strip()
+            value = body.get("value")
+            if value is None:
+                value = ""
+            try:
+                return self._json(okstratr_harness.set_harness_value(key, str(value)))
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/okstratr/harness/reload":
+            try:
+                return self._json(okstratr_harness.reload_harnesses())
+            except okstratr_harness.OkstratrHarnessError as e:
+                return self._json(okstratr_harness.error_payload(e), int(e.status or 502))
+        if path == "/api/viewer":
+            try:
+                return self._json(viewer_mutex.set_mode(
+                    body.get("mode") or body.get("viewer_mode") or "",
+                    source="api",
+                ))
+            except ValueError as exc:
+                return self._json({"ok": False, "error": str(exc)}, 400)
         if path == "/api/rebuild":
             return self._json(graph.rebuild())
         if path == "/api/atlas/enrich-kinds":
@@ -268,6 +321,13 @@ class Handler(BaseHTTPRequestHandler):
 def main(port: int = 8766, host: str = "127.0.0.1") -> int:
     paths.ensure_workspace()
     status.snapshot()
+    # C1: always auto-start CE + okstratr with the session (Ben lock).
+    # CE data/APIs = this daemon; okstratr spawned on :8767. Mutex: no HTML
+    # atlas host when QML — backends still start.
+    try:
+        core_skills.ensure_started(paths.workspace(), keep_alive=True)
+    except Exception as exc:  # noqa: BLE001 — never block serve on spawn fail
+        print(f"okbayd: core-skills auto-start warning: {exc}")
     # Warm stem→path index in background so /health is immediate but first
     # /api/atlas/page is O(1) after the index lands (critical on 9p / Biocure).
     wiki.warm_stem_index_background()

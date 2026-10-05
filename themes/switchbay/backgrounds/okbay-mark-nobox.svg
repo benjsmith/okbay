@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 384">
   <g transform="translate(0 0) scale(12)">
-    <g stroke-linecap="round" stroke-width="3.2" fill="none">
-      <line x1="5" y1="27" x2="11" y2="7" stroke="#5a2bf0"/>
-      <line x1="9" y1="27" x2="15" y2="7" stroke="#2079ab"/>
-      <line x1="13" y1="27" x2="19" y2="7" stroke="#12996a"/>
-      <line x1="17" y1="27" x2="23" y2="7" stroke="#f08a12"/>
-      <line x1="21" y1="27" x2="27" y2="7" stroke="#a83e7e"/>
+    <g stroke-linecap="round" stroke-width="2.55" fill="none">
+      <line x1="6.3000" y1="27.0000" x2="12.3000" y2="7.0000" stroke="#5a2bf0"/>
+      <line x1="9.6500" y1="27.0000" x2="15.6500" y2="7.0000" stroke="#2079ab"/>
+      <line x1="13.0000" y1="27.0000" x2="19.0000" y2="7.0000" stroke="#12996a"/>
+      <line x1="16.3500" y1="27.0000" x2="22.3500" y2="7.0000" stroke="#f08a12"/>
+      <line x1="19.7000" y1="27.0000" x2="25.7000" y2="7.0000" stroke="#a83e7e"/>
     </g>
-    <circle cx="4" cy="28" r="2.2" fill="#d7dbe2"/>
-    <circle cx="28" cy="4" r="2.2" fill="#d7dbe2"/>
+    <circle cx="4.1500" cy="28.3500" r="0.8" fill="#ffffff"/>
+    <circle cx="27.8500" cy="5.6500" r="0.8" fill="#ffffff"/>
   </g>
 </svg>

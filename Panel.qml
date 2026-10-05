@@ -23,6 +23,9 @@ Item {
   readonly property color themeAccent: (typeof Color !== "undefined" && Color.accent) ? Color.accent : "#6be8b3"
   readonly property string apiUrl: (status && status.api_url) ? status.api_url : "http://127.0.0.1:8766"
   readonly property string atlasUrl: (status && status.atlas_url) ? status.atlas_url : (apiUrl + "/atlas")
+  // Charter Phase 5a: when viewer_mode=qml, HTML atlas host is off — do not spawn Chromium.
+  readonly property bool htmlUiEnabled: !(status && status.html_ui_enabled === false)
+  readonly property string viewerMode: (status && status.viewer_mode) ? status.viewer_mode : "html"
 
   function open(payloadJson) {
     var surface = "panel"
@@ -45,6 +48,13 @@ Item {
   function toggle(payloadJson) { opened ? close() : open(payloadJson) }
 
   function openAtlasWindow() {
+    // Charter Phase 5a mutex: QML viewer ⇒ HTML atlas host off (no duplicate Chromium UI).
+    if (!root.htmlUiEnabled) {
+      console.log("okbay: viewer_mode=qml — HTML atlas suppressed; opening Reviews panel instead")
+      opened = true
+      statusFile.reload()
+      return
+    }
     // Frameless Chromium --app= (Qt WebEngine crashes under Quickshell here).
     // Delegate focus-or-launch to okbay-open-atlas.sh (skip summon to avoid recursion).
     Quickshell.execDetached([
