@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# OKBay full-product opener for Hyprland / Omarchy guests (Mac Mini + Try Omarchy).
+# okbay full-product opener for Hyprland / Omarchy.
 #
-# Live Mac Mini Omarchy guest install path (document for operators):
-#   /home/benj/.local/bin/okbay-open-full-product.sh
-# Also installed by setup.sh to:
+# Installed by setup.sh to:
 #   ~/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-open-full-product.sh
 #   ~/.local/bin/okbay-open-full-product.sh
 #
@@ -13,7 +11,7 @@
 #
 # Omarchy-like behaviour (not float-over-current):
 #   1) Kill leftover fullscreen Atlas on the *previous* workspace
-#   2) Ensure okbayd serves BioCure freeze workspace on :8766
+#   2) Ensure okbayd serves the chosen workspace on :8766
 #   3) Switch to a fresh / dedicated Hyprland workspace
 #   4) Populate a 2x2 panel split:
 #        Top-left:     okbay / Atlas   (class OkbayAtlas)
@@ -24,13 +22,18 @@
 # Env knobs:
 #   OKBAY_FULL_PRODUCT_WS   workspace target: "next-empty" (default), a number,
 #                           or "special:okbay"
-#   OKBAY_WORKSPACE         wiki/vault root (default: BioCure membership tip 7074bbec6)
+#   OKBAY_WORKSPACE         wiki/vault root to open (default: the workspace
+#                           okbay last served, from ~/.local/state/okbay/workspace,
+#                           else whatever okbayd is serving now)
+#   OKBAY_SRC               okbay source checkout, used when the okbay CLI is
+#                           not on PATH (default ~/src/okbay)
+#   OKSTRATR_SRC            okstratr source checkout (default ~/src/okstratr)
 #   OKSTRATR_URL            default http://127.0.0.1:8767
 #   OKBAY_ATLAS_URL         Atlas URL for the TL pane
 set -u
 export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
 export PATH="${HOME}/.local/bin:/usr/bin:${PATH}"
-# Full-product MUST never launch Chromium --start-fullscreen (Ben overlay bug).
+# The 2x2 layout needs a tiled Atlas: never launch Chromium --start-fullscreen.
 export OKBAY_ATLAS_TILED=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,56 +68,37 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   log "HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE"
 fi
 
-# BioCure membership tip 7074bbec6 (fallback confirm-v1 5b9711895; not hybrid 76142912). Guest + host well-known paths.
-# Active BioCure tip (membership) preferred; confirm-v1 remains a fallback tip.
-BIOCURE_NAME="biocure-membership-7074bbec6"
-BIOCURE_FALLBACK_NAME="biocure-confirm-v1-query-5b9711895"
+OKBAY_SRC="${OKBAY_SRC:-${HOME}/src/okbay}"
+OKSTRATR_SRC="${OKSTRATR_SRC:-${HOME}/src/okstratr}"
+export OKBAY_SRC OKSTRATR_SRC
+OKBAY_STATE_WORKSPACE="${HOME}/.local/state/okbay/workspace"
 
 # True when path is the okbay *code* repo — never seat Herdr agents there.
 is_okbay_code_repo() {
   local p="${1:-}"
   [[ -n "$p" && -d "$p" ]] || return 1
-  local base
-  base="$(basename -- "$p")"
-  if [[ "$base" == "okbay" ]]; then
-    local hits=0
-    [[ -f "$p/Cargo.toml" ]] && hits=$((hits + 1))
-    [[ -d "$p/contrib" ]] && hits=$((hits + 1))
-    [[ -d "$p/crates" ]] && hits=$((hits + 1))
-    [[ -d "$p/skills" ]] && hits=$((hits + 1))
-    [[ -f "$p/Panel.qml" ]] && hits=$((hits + 1))
-    [[ "$hits" -ge 2 ]] && return 0
-  fi
-  case "$p" in
-    /mnt/mac/okbay|${HOME}/Work/okbay|${HOME}/Dev/okbay|${HOME}/src/okbay) return 0 ;;
-  esac
-  local resolved
+  local resolved src
   resolved="$(readlink -f -- "$p" 2>/dev/null || printf '%s' "$p")"
-  case "$resolved" in
-    /mnt/mac/okbay) return 0 ;;
-  esac
+  src="$(readlink -f -- "$OKBAY_SRC" 2>/dev/null || printf '%s' "$OKBAY_SRC")"
+  [[ "$resolved" == "$src" ]] && return 0
+  local hits=0
+  [[ -f "$p/Cargo.toml" ]] && hits=$((hits + 1))
+  [[ -d "$p/contrib" ]] && hits=$((hits + 1))
+  [[ -d "$p/crates" ]] && hits=$((hits + 1))
+  [[ -d "$p/skills" ]] && hits=$((hits + 1))
+  [[ -f "$p/Panel.qml" ]] && hits=$((hits + 1))
+  [[ "$hits" -ge 3 ]] && return 0
   return 1
 }
 
-resolve_biocure_workspace() {
-  local cand name
-  for name in "$BIOCURE_NAME" "$BIOCURE_FALLBACK_NAME"; do
-    for cand in \
-      "${OKBAY_WORKSPACE:-}" \
-      "/mnt/mac/Workspaces/${name}" \
-      "${HOME}/Workspaces/${name}" \
-      "${HOME}/Work/Workspaces/${name}" \
-      "${HOME}/Work/${name}"
-    do
-      [[ -n "$cand" && -d "$cand" ]] || continue
-      is_okbay_code_repo "$cand" && continue
-      if [[ -d "$cand/wiki" || -d "$cand/vault" || -d "$cand/.curator" || -d "$cand/.okbay" ]]; then
-        printf '%s\n' "$cand"
-        return 0
-      fi
-      printf '%s\n' "$cand"
-      return 0
-    done
+# Workspace to open: OKBAY_WORKSPACE, else the one okbay last served.
+resolve_default_workspace() {
+  local cand
+  for cand in "${OKBAY_WORKSPACE:-}" "$(cat "$OKBAY_STATE_WORKSPACE" 2>/dev/null || true)"; do
+    [[ -n "$cand" && -d "$cand" ]] || continue
+    is_okbay_code_repo "$cand" && continue
+    printf '%s\n' "$cand"
+    return 0
   done
   return 1
 }
@@ -128,9 +112,9 @@ resolve_herdr_agent_cwd() {
   fi
   if command -v python3 >/dev/null 2>&1; then
     cand="$(
-      PYTHONPATH="/mnt/mac/okbay/src:${HOME}/Dev/okbay/src:${HOME}/src/okbay/src:${PYTHONPATH:-}" \
+      PYTHONPATH="${OKBAY_SRC}/src:${PYTHONPATH:-}" \
       python3 - <<'PY' 2>/dev/null || true
-import json, urllib.request
+import json, os, urllib.request
 from pathlib import Path
 
 def looks_repo(p: Path) -> bool:
@@ -142,9 +126,10 @@ def looks_repo(p: Path) -> bool:
         hits = sum(1 for m in ("Cargo.toml", "contrib", "crates", "skills", "Panel.qml") if (p / m).exists())
         if hits >= 2:
             return True
-    for tip in ("/mnt/mac/okbay", str(Path.home() / "Work" / "okbay"), str(Path.home() / "Dev" / "okbay")):
+    src = os.environ.get("OKBAY_SRC") or ""
+    if src:
         try:
-            if p == Path(tip).expanduser().resolve():
+            if p == Path(src).expanduser().resolve():
                 return True
         except OSError:
             pass
@@ -174,14 +159,6 @@ if isinstance(data, dict):
     if current:
         candidates.append(str(current))
 
-for tip in (
-    "/mnt/mac/Workspaces/biocure-membership-7074bbec6",
-    str(Path.home() / "Work" / "Workspaces" / "biocure-membership-7074bbec6"),
-    "/mnt/mac/Workspaces/biocure-confirm-v1-query-5b9711895",
-    str(Path.home() / "Work" / "Workspaces" / "biocure-confirm-v1-query-5b9711895"),
-):
-    candidates.append(tip)
-
 for raw in candidates:
     p = Path(raw).expanduser()
     if not p.is_dir():
@@ -198,7 +175,7 @@ PY
       return 0
     fi
   fi
-  if cand="$(resolve_biocure_workspace 2>/dev/null)"; then
+  if cand="$(resolve_default_workspace 2>/dev/null)"; then
     if [[ -n "$cand" && -d "$cand" ]] && ! is_okbay_code_repo "$cand"; then
       printf '%s\n' "$cand"
       return 0
@@ -207,13 +184,13 @@ PY
   return 1
 }
 
-# Default OKBAY_WORKSPACE to BioCure freeze when unset / empty.
+# Default OKBAY_WORKSPACE to the workspace okbay last served.
 if [[ -z "${OKBAY_WORKSPACE:-}" ]]; then
-  if WS_RESOLVED="$(resolve_biocure_workspace 2>/dev/null)"; then
+  if WS_RESOLVED="$(resolve_default_workspace 2>/dev/null)"; then
     export OKBAY_WORKSPACE="$WS_RESOLVED"
   fi
 fi
-# Still export even when caller set a non-BioCure path — resolve_nautilus uses it first.
+# resolve_nautilus_path uses it first.
 if [[ -n "${OKBAY_WORKSPACE:-}" ]]; then
   export OKBAY_WORKSPACE
   log "OKBAY_WORKSPACE=$OKBAY_WORKSPACE"
@@ -271,8 +248,8 @@ ensure_html_viewer() {
     okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
       || OKBAY_WORKSPACE="${OKBAY_WORKSPACE:-}" okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 \
       || true
-  elif [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
-    PYTHONPATH="${HOME}/src/okbay/src" python3 -m okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 || true
+  elif [[ -d "${OKBAY_SRC}/src/okbay" ]]; then
+    PYTHONPATH="${OKBAY_SRC}/src" python3 -m okbay viewer set html >>/tmp/okbay-viewer.log 2>&1 || true
   else
     printf '%s\n' '{"mode":"html","source":"full-product"}' >"${HOME}/.config/okbay/viewer.json"
   fi
@@ -281,10 +258,10 @@ ensure_html_viewer() {
 }
 
 ensure_okbay_serve() {
-  # Serve BioCure freeze on :8766 before Atlas opens.
+  # Serve the chosen workspace on :8766 before Atlas opens.
   local want="${OKBAY_WORKSPACE:-}"
   if [[ -z "$want" ]]; then
-    want="$(resolve_biocure_workspace 2>/dev/null || true)"
+    want="$(resolve_default_workspace 2>/dev/null || true)"
   fi
   if [[ -z "$want" || ! -d "$want" ]]; then
     log "okbay workspace missing; skip daemon restart want=${want:-}"
@@ -309,26 +286,13 @@ ensure_okbay_serve() {
   if [[ -z "$cur" ]]; then
     need_restart=1
   elif [[ "$cur" != "$want" ]]; then
-    # Allow suffix match (symlink /mnt/mac vs ~/Workspaces)
-    case "$cur" in
-      "$want"|"$want"/*) need_restart=0 ;;
-      *"${BIOCURE_NAME}"*)
-        # Already on BioCure tip path — ok even if prefix differs
-        if [[ "$want" == *"${BIOCURE_NAME}"* ]]; then
-          need_restart=0
-          log "okbay already on BioCure ($cur)"
-        else
-          need_restart=1
-        fi
-        ;;
+    local cur_r want_r
+    cur_r="$(readlink -f -- "$cur" 2>/dev/null || printf '%s' "$cur")"
+    want_r="$(readlink -f -- "$want" 2>/dev/null || printf '%s' "$want")"
+    case "$cur_r" in
+      "$want_r"|"$want_r"/*) need_restart=0 ;;
       *) need_restart=1 ;;
     esac
-  fi
-
-  # Reject hybrid tip workspace if accidentally active
-  if [[ "$cur" == *"76142912"* ]]; then
-    log "okbay on hybrid 76142912 — forcing BioCure freeze restart"
-    need_restart=1
   fi
 
   if [[ "$need_restart" -eq 0 ]]; then
@@ -374,8 +338,8 @@ ensure_okbay_serve() {
   if command -v okbay >/dev/null 2>&1; then
     OKBAY_WORKSPACE="$want" nohup okbay setup --workspace "$want" >>/tmp/okbay-setup.log 2>&1 &
     log "okbay setup backgrounded pid=$!"
-  elif [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
-    OKBAY_WORKSPACE="$want" PYTHONPATH="${HOME}/src/okbay/src" \
+  elif [[ -d "${OKBAY_SRC}/src/okbay" ]]; then
+    OKBAY_WORKSPACE="$want" PYTHONPATH="${OKBAY_SRC}/src" \
       nohup python3 -m okbay setup --workspace "$want" >>/tmp/okbay-setup.log 2>&1 &
     log "okbay setup (module) backgrounded pid=$!"
   fi
@@ -398,9 +362,9 @@ EOF
   # Fallback: prefer PYTHONPATH module serve when okbayd wrapper fails / health down
   if ! curl -fsS -m 2 "${OKBAY_URL}/health" >/dev/null 2>&1 \
     && ! curl -fsS -m 2 "${OKBAY_URL}/api/status" >/dev/null 2>&1; then
-    if [[ -d "${HOME}/src/okbay/src/okbay" ]]; then
-      log "okbay serve via PYTHONPATH=~/src/okbay/src python3 -m okbay serve"
-      OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html PYTHONPATH="${HOME}/src/okbay/src" \
+    if [[ -d "${OKBAY_SRC}/src/okbay" ]]; then
+      log "okbay serve via PYTHONPATH=${OKBAY_SRC}/src python3 -m okbay serve"
+      OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html PYTHONPATH="${OKBAY_SRC}/src" \
         nohup python3 -m okbay serve >>/tmp/okbayd.log 2>&1 &
     elif command -v okbayd >/dev/null 2>&1; then
       OKBAY_WORKSPACE="$want" OKBAY_VIEWER_MODE=html nohup okbayd --port 8766 >>/tmp/okbayd.log 2>&1 &
@@ -429,10 +393,7 @@ resolve_nautilus_path() {
   local cand
   for cand in \
     "${OKBAY_WORKSPACE:-}" \
-    "/mnt/mac/Workspaces/${BIOCURE_NAME}" \
-    "${HOME}/Workspaces/${BIOCURE_NAME}" \
-    "${HOME}/Work/Workspaces/${BIOCURE_NAME}" \
-    "${HOME}/Work/okbay"
+    "$(okbay_status_workspace 2>/dev/null || true)"
   do
     [[ -n "$cand" && -d "$cand" ]] || continue
     if [[ -d "$cand/wiki" ]]; then
@@ -686,7 +647,7 @@ ensure_herdr_slash_ready() {
   # After Herdr UI is up: sync seat_cwd to active OKBay *workspace* and ensure
   # at least one agent pane runs there so slash skills (/okstratr, aliases) work.
   # Bare `foot -e herdr` only attaches the TUI — it does not start Grok.
-  # NEVER seat on the okbay code repo (/mnt/mac/okbay, ~/Dev/okbay, …).
+  # Never seat on the okbay code repo ($OKBAY_SRC).
   log "ensure herdr slash-ready agent"
   command -v herdr >/dev/null 2>&1 || { log "herdr missing; skip agent seat"; return 0; }
 
@@ -704,9 +665,7 @@ ensure_herdr_slash_ready() {
 
   # Sync okstratr operating cwd when package is importable.
   local pypath="${PYTHONPATH:-}"
-  [[ -d /mnt/mac/okstratr/src ]] && pypath="/mnt/mac/okstratr/src:${pypath}"
-  [[ -d "${HOME}/Dev/okstratr/src" ]] && pypath="${HOME}/Dev/okstratr/src:${pypath}"
-  [[ -d "${HOME}/src/okstratr/src" ]] && pypath="${HOME}/src/okstratr/src:${pypath}"
+  [[ -d "${OKSTRATR_SRC}/src" ]] && pypath="${OKSTRATR_SRC}/src:${pypath}"
   if [[ -d "$cwd" ]]; then
     PYTHONPATH="$pypath" OKSTRATR_SEAT_CWD="$cwd" python3 - <<'PY' >>"$LOG" 2>&1 || true
 import os, sys

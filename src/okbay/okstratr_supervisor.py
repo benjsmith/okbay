@@ -134,7 +134,7 @@ def _set_state(state: str, detail: str = "") -> None:
 
 
 def contract_slice() -> dict[str, Any]:
-    """C1 status slice for okstratr."""
+    """Status slice for okstratr."""
     healthy = is_healthy()
     pid = _read_pid()
     if healthy:
@@ -193,7 +193,7 @@ def start(workspace: Path | None = None) -> dict[str, Any]:
     env = os.environ.copy()
     env.setdefault("OKSTRATR_HOST", "okbay")
     env.setdefault("OKSTRATR_HOSTED", "okbay")
-    # Default notify URL → okbay Herdr stub (contract C2).
+    # Default notify URL → okbay Herdr stub.
     env.setdefault(
         "OKSTRATR_HOST_NOTIFY_URL",
         "http://127.0.0.1:8766/api/okstratr/host-notify",

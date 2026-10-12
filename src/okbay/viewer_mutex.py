@@ -1,6 +1,6 @@
-"""HTML vs QML viewer mutex (charter Phase 5a).
+"""HTML vs QML viewer mutex.
 
-Charter locked decision #3: okbay QML active ⇒ HTML atlas/observer hosts **off**
+When the okbay QML viewer is active, ⇒ HTML atlas/observer hosts **off**
 (single viewer route). JSON APIs on :8766 stay up either way.
 
 Resolution order (highest wins):
@@ -109,7 +109,7 @@ def blocked_payload(path: str, mode: ViewerMode | None = None) -> dict[str, Any]
         "error": "html_ui_disabled",
         "message": (
             "QML viewer mode is active; HTML atlas/observer hosts are off "
-            "(charter: single viewer route). Use Omarchy QML panels or JSON API."
+            "(one viewer at a time). Use Omarchy QML panels or JSON API."
         ),
         "path": path,
         "viewer_mode": m,

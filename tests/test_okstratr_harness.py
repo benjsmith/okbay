@@ -1,4 +1,4 @@
-"""Thin client / mapper over okstratr harness registry (SSOT)."""
+"""Thin client / mapper over okstratr harness registry."""
 from __future__ import annotations
 
 import json

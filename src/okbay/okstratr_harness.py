@@ -1,6 +1,6 @@
-"""Thin client over okstratr harness+model registry (SSOT).
+"""Thin client over okstratr harness+model registry.
 
-Ben lock: okstratr owns the harness allowlist and model pools
+okstratr owns the harness allowlist and model pools
 (``harnesses.toml``). okbay Settings / CLI configure that registry
 through HTTP — they must **not** invent a parallel okbay allowlist.
 
@@ -151,7 +151,7 @@ def upstream_url(action: str = "list") -> str:
 def normalize_registry(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     """Map okstratr ``list_for_api`` JSON into a stable okbay view.
 
-    Pass-through of the SSOT fields; never invents an allowlist. Missing
+    Pass-through of okstratr's fields; never invents an allowlist. Missing
     keys become empty defaults so CLI/UI can render safely.
     """
     raw = dict(payload or {})

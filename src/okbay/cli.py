@@ -56,7 +56,7 @@ def main(argv=None):
 
     priv = sub.add_parser("privacy"); priv.add_argument("path"); priv.add_argument("--json", action="store_true")
 
-    vw = sub.add_parser("viewer", help="HTML vs QML viewer mutex (charter Phase 5a)")
+    vw = sub.add_parser("viewer", help="Choose the HTML or QML viewer (only one runs at a time)")
     vwsub = vw.add_subparsers(dest="viewer_cmd", required=True)
     vwsub.add_parser("status", help="Show viewer_mode / html_ui_enabled")
     vset = vwsub.add_parser("set", help="Persist mode to ~/.config/okbay/viewer.json")
@@ -75,7 +75,7 @@ def main(argv=None):
 
     cs = sub.add_parser(
         "core-skills",
-        help="CE + okstratr auto-start / C1 health (contract C1)",
+        help="CE + okstratr auto-start and health",
     )
     cssub = cs.add_subparsers(dest="core_skills_cmd", required=True)
     cssub.add_parser("status", help="Show ce/okstratr/wiki_build health shape")
@@ -85,7 +85,7 @@ def main(argv=None):
 
     hr = sub.add_parser(
         "harness",
-        help="okstratr harness registry SSOT (thin client; no okbay allowlist)",
+        help="okstratr harness registry (okstratr owns the list; okbay only reads and edits it)",
     )
     hrsub = hr.add_subparsers(dest="harness_cmd", required=True)
     hrsub.add_parser("list", help="List harnesses from okstratr (GET /api/harness)")

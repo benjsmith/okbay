@@ -1,6 +1,6 @@
 """v22: starfield-only night sky + flush parallel bars + doubled crisp end dots (no wet glass).
 
-Ben 2026-09-20 brief vs v21:
+Changes from v21:
 1. Remove wet surface / nanotexture glass entirely — pure procedural starfield.
 2. Boost starfield resolution/realism (sharp deep night, parallax-ready detail).
 3. Logo geometry memory: five perfectly parallel diagonal bars, flush, tightened

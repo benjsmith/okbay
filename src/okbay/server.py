@@ -73,7 +73,7 @@ class Handler(BaseHTTPRequestHandler):
         u = urlparse(self.path)
         q = parse_qs(u.query)
         path = u.path
-        # Charter #3: QML active ⇒ HTML atlas /views hosts off (JSON API stays).
+        # QML viewer active ⇒ HTML atlas /views hosts off (JSON API stays).
         if viewer_mutex.should_block_html_ui(path):
             accept = (self.headers.get("Accept") or "").lower()
             if "application/json" in accept:
@@ -321,7 +321,7 @@ class Handler(BaseHTTPRequestHandler):
 def main(port: int = 8766, host: str = "127.0.0.1") -> int:
     paths.ensure_workspace()
     status.snapshot()
-    # C1: always auto-start CE + okstratr with the session (Ben lock).
+    # Start CE + okstratr with the session (okstratr: OKBAY_AUTOSTART_OKSTRATR=0 to skip).
     # CE data/APIs = this daemon; okstratr spawned on :8767. Mutex: no HTML
     # atlas host when QML — backends still start.
     try:
@@ -329,7 +329,7 @@ def main(port: int = 8766, host: str = "127.0.0.1") -> int:
     except Exception as exc:  # noqa: BLE001 — never block serve on spawn fail
         print(f"okbayd: core-skills auto-start warning: {exc}")
     # Warm stem→path index in background so /health is immediate but first
-    # /api/atlas/page is O(1) after the index lands (critical on 9p / Biocure).
+    # /api/atlas/page is O(1) after the index lands (matters on large wikis and 9p mounts).
     wiki.warm_stem_index_background()
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"okbayd listening on http://{host}:{port} workspace={paths.workspace()}")

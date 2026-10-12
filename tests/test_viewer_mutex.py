@@ -1,4 +1,4 @@
-"""Phase 5a: HTML vs QML viewer mutex policy."""
+"""HTML vs QML viewer mutex policy."""
 from __future__ import annotations
 
 import json

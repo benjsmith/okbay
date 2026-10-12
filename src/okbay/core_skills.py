@@ -1,11 +1,12 @@
-"""Combined core-skills auto-start + C1 status (CE + okstratr + wiki_build).
+"""Combined core-skills auto-start + status (CE + okstratr + wiki_build).
 
-Ben lock: always auto-start CE + okstratr with the okbay session/daemon.
+CE + okstratr start with the okbay session/daemon unless OKBAY_AUTOSTART_OKSTRATR=0.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -18,9 +19,16 @@ _started = False
 _lock = threading.Lock()
 _poller: threading.Thread | None = None
 
+_OFF = frozenset({"0", "false", "no", "off"})
+
+
+def okstratr_autostart_enabled() -> bool:
+    """False when OKBAY_AUTOSTART_OKSTRATR is 0/false/no/off (default: on)."""
+    return (os.environ.get("OKBAY_AUTOSTART_OKSTRATR") or "").strip().lower() not in _OFF
+
 
 def status(workspace: Path | None = None) -> dict[str, Any]:
-    """Return the C1 status object."""
+    """Return the core-skills status object."""
     ce = ce_supervisor.contract_slice(workspace)
     oks = okstratr_supervisor.contract_slice()
     wiki = ce_supervisor.wiki_build_slice()
@@ -50,7 +58,11 @@ def ensure_started(
         # Claim local API immediately so status is not empty while bind races.
         ce_supervisor.claim_local_api()
 
-        if wait_okstratr:
+        autostart = okstratr_autostart_enabled()
+        if not autostart:
+            oks_out: dict[str, Any] = {"ok": True, "disabled": True}
+            log.info("okstratr auto-start disabled (OKBAY_AUTOSTART_OKSTRATR)")
+        elif wait_okstratr:
             oks_out = okstratr_supervisor.start(ws)
         else:
             # Non-blocking spawn so serve() can bind :8766 quickly.
@@ -66,7 +78,7 @@ def ensure_started(
 
             threading.Thread(target=_spawn, name="okbay-okstratr-start", daemon=True).start()
 
-        if keep_alive and (_poller is None or not _poller.is_alive()):
+        if autostart and keep_alive and (_poller is None or not _poller.is_alive()):
             _poller = threading.Thread(
                 target=okstratr_supervisor.poll_forever,
                 args=(ws,),

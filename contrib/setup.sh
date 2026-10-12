@@ -49,9 +49,6 @@ for opener in okbay-open-atlas.sh okbay-open-full-product.sh okbay-arrange-full-
   if [ -f "$REPO_ROOT/contrib/$opener" ]; then
     install -m 0755 "$REPO_ROOT/contrib/$opener"       "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/$opener"
     install -m 0755 "$REPO_ROOT/contrib/$opener" "$BIN/$opener"
-    if [ -d "$HOME/src/okbay/contrib" ]; then
-      install -m 0755 "$REPO_ROOT/contrib/$opener" "$HOME/src/okbay/contrib/$opener"
-    fi
   fi
 done
 BINDINGS_LUA="$HOME/.config/hypr/bindings.lua"
@@ -99,6 +96,5 @@ systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now okbayd.service 2>/dev/null || echo "(systemd user unit not enabled)"
 echo "Okbay setup complete. Atlas: http://127.0.0.1:8766/atlas"
 echo "Hypr: Super+Shift+K → OKBay full product 2x2 workspace (Atlas|Nautilus / Herdr|okstratr). Super+Ctrl+K = Mac-host alt. Super+Shift+O = Okstratr only."
-echo "Note: keep Super+Shift+S as screenshot via personal unbind; Maps → Super+Alt+S (not Super+Shift+M=Music; do not edit /usr/share/omarchy defaults)."
-echo "Live guest path: ~/.local/bin/okbay-open-full-product.sh (Mac Mini Omarchy: /home/benj/.local/bin/okbay-open-full-product.sh)."
+echo "Full-product opener: ~/.local/bin/okbay-open-full-product.sh (set OKBAY_WORKSPACE to choose the workspace it opens)."
 echo "Hypr windowrules: ~/.config/hypr/okbay-atlas.conf — after install: hyprctl reload"

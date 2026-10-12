@@ -1,6 +1,6 @@
 """Map okstratr ``host_notify`` envelopes onto Herdr-visible I/O.
 
-Contract C2: okbay / Omarchy sink is **Herdr only** (path-native). okstratr
+The okbay / Omarchy sink is **Herdr only** (path-native). okstratr
 emits ``okstratr.host_notify`` v1; this host validates and forwards to the
 Herdr bridge stub:
 

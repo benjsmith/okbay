@@ -1,4 +1,4 @@
-"""C1 session auto-start: CE + okstratr helpers + viewer_mutex interaction."""
+"""Session auto-start: CE + okstratr helpers + viewer_mutex interaction."""
 from __future__ import annotations
 
 import importlib
@@ -16,6 +16,7 @@ def autostart_env(tmp_path, monkeypatch):
     monkeypatch.delenv("OKBAY_CE_EXTERNAL_VIEWER", raising=False)
     monkeypatch.delenv("OKBAY_OKSTRATR_UPSTREAM", raising=False)
     monkeypatch.delenv("OKBAY_CE_UPSTREAM", raising=False)
+    monkeypatch.delenv("OKBAY_AUTOSTART_OKSTRATR", raising=False)
 
     import okbay.ce_supervisor as ce_sup
     import okbay.core_skills as core_skills
@@ -188,6 +189,39 @@ def test_ensure_started_invokes_ce_and_okstratr(autostart_env, monkeypatch):
     assert calls["oks"] == 1
     assert "status" in out
     assert set(out["status"]) == {"ce", "okstratr", "wiki_build"}
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", "OFF"])
+def test_ensure_started_okstratr_autostart_disabled(autostart_env, monkeypatch, value):
+    env = autostart_env
+    calls = {"ce": 0, "oks": 0, "poll": 0}
+
+    def fake_ce_start(ws):
+        calls["ce"] += 1
+        return {"ok": True, "html_viewer_allowed": True, "apis": True}
+
+    def fake_oks_start(ws=None):
+        calls["oks"] += 1
+        return {"ok": True}
+
+    def fake_poll(*a, **k):
+        calls["poll"] += 1
+
+    monkeypatch.setattr(env["ce"], "start", fake_ce_start)
+    monkeypatch.setattr(env["oks"], "start", fake_oks_start)
+    monkeypatch.setattr(env["oks"], "poll_forever", fake_poll)
+    monkeypatch.setenv("OKBAY_AUTOSTART_OKSTRATR", value)
+
+    out = env["core"].ensure_started(env["ws"], keep_alive=True, wait_okstratr=False)
+    assert out["ok"] is True
+    assert out["okstratr"] == {"ok": True, "disabled": True}
+    assert calls == {"ce": 1, "oks": 0, "poll": 0}
+
+
+@pytest.mark.parametrize("value", ["", "1", "true", "yes"])
+def test_okstratr_autostart_enabled_by_default(autostart_env, monkeypatch, value):
+    monkeypatch.setenv("OKBAY_AUTOSTART_OKSTRATR", value)
+    assert autostart_env["core"].okstratr_autostart_enabled() is True
 
 
 def test_status_snapshot_includes_health(autostart_env, monkeypatch):

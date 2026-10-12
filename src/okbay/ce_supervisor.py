@@ -1,11 +1,11 @@
 """CE availability for okbay sessions (core skill).
 
-Contract C1 (okbay row): start CE viewer when the HTML path needs it; when QML
+Start CE viewer when the HTML path needs it; when QML
 is active, still keep CE **data/APIs** available and do **not** open the HTML
 atlas host (viewer_mutex).
 
 Today okbay itself is the CE data plane on ``:8766`` (graph / atlas JSON).
-Charter end-state may move HTTP to a standalone CE process; until then this
+CE may later run as its own HTTP process; until then this
 supervisor:
 
 * Marks CE healthy when the local okbay API (``OKBAY_CE_UPSTREAM``, default
@@ -44,7 +44,7 @@ _WIKI_BUILD: dict[str, object] = {
     "pages": None,
     "detail": "",
 }
-# True once session autostart has claimed the local okbay API as CE SSOT.
+# True once session autostart has claimed the local okbay API for CE.
 _LOCAL_API_CLAIMED = False
 
 
@@ -121,7 +121,7 @@ def is_healthy(*, timeout: float = 2.0) -> bool:
         return False
 
 
-def claim_local_api(*, detail: str = "okbay API (CE SSOT)") -> None:
+def claim_local_api(*, detail: str = "okbay API (CE)") -> None:
     """Called from okbayd serve: this process *is* the CE data plane."""
     global _LOCAL_API_CLAIMED
     _LOCAL_API_CLAIMED = True
@@ -157,7 +157,7 @@ def _pid_alive(pid: int) -> bool:
 
 
 def contract_slice(workspace: Path | None = None) -> dict[str, Any]:
-    """C1 status slice for CE."""
+    """Status slice for CE."""
     healthy = is_healthy()
     pid = _read_pid()
     if healthy:
@@ -295,7 +295,7 @@ def start(workspace: Path | None = None) -> dict[str, Any]:
 
     if not html_ok:
         # QML: backends/APIs only — never open HTML atlas host.
-        claim_local_api(detail="okbay API (CE SSOT)")
+        claim_local_api(detail="okbay API (CE)")
         result["detail"] = "qml: CE APIs on; HTML atlas host off"
         result["external_viewer"] = {"ok": False, "skipped": True, "reason": "qml_mutex"}
         return result
@@ -317,7 +317,7 @@ def start(workspace: Path | None = None) -> dict[str, Any]:
             "reason": "okbay HTML atlas is CE viewer surface (set OKBAY_CE_EXTERNAL_VIEWER=1 for viewer.sh)",
         }
 
-    claim_local_api(detail="okbay API (CE SSOT)")
+    claim_local_api(detail="okbay API (CE)")
     result["detail"] = "html: CE APIs + atlas host via okbayd"
     # If upstream already answers, refine state.
     if is_healthy():

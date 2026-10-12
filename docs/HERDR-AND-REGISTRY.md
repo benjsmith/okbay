@@ -1,6 +1,5 @@
 # Herdr + okstratr registry (okbay)
 
-See **[SKILL-SHELL-INVENTORY.md](./SKILL-SHELL-INVENTORY.md)** §D–E for the Phase 5a contracts.
 
 ## Herdr — okbay / Omarchy only
 
@@ -9,7 +8,7 @@ See **[SKILL-SHELL-INVENTORY.md](./SKILL-SHELL-INVENTORY.md)** §D–E for the P
 - okbay does not embed Herdr HTML; panes stay Omarchy-native.
 - Finite jobs: `okstratr herdr run-ready` (always stop/release).
 
-## Settings → okstratr registry (SSOT)
+## Settings → okstratr registry
 
 - okbay settings UIs write **okstratr** harness+model registry only.
 - No second allowlist inside okbay.
@@ -57,7 +56,7 @@ Upstream CLI still works: `okstratr harness list|enable|…`.
 See Switchbay `docs/ADR-005-okstratr-harness-registry-client.md`.
 
 
-## Path-native notify (contract C2)
+## Path-native notify
 
 Schedule / desk progress on the okbay path goes to **Herdr only** — not OS notify,
 not a second inbox. See skill-shell `CONTRACT-AUTO-START-AND-NOTIFY.md` and okstratr
@@ -84,14 +83,20 @@ echo '{...}' | okbay host-notify
 Herdr (or a future bridge) should **tail** the JSONL; full Herdr ingest API can
 replace the stub later without changing the envelope contract.
 
-## Session auto-start (contract C1)
+## Session auto-start
 
-On ``okbay serve`` / daemon start, okbay **always** brings up core skills:
+On ``okbay serve`` / daemon start, okbay brings up core skills:
 
 | Skill | Action | Port / URL |
 |-------|--------|------------|
 | **okstratr** | ``okstratr serve --host 127.0.0.1 --port 8767`` (keep-alive supervisor) | ``http://127.0.0.1:8767`` |
 | **CE** | Claim okbay JSON APIs as CE data plane; warm wiki/status | ``http://127.0.0.1:8766`` |
+
+To run okstratr yourself (or not at all), set ``OKBAY_AUTOSTART_OKSTRATR=0``
+in the environment of ``okbay serve`` / ``okbayd.service``. okbay then skips
+the okstratr spawn and its keep-alive supervisor; CE APIs still start, and
+``okbay core-skills status`` still reports whether an okstratr is reachable on
+``:8767``.
 
 Viewer mutex: when ``viewer_mode=qml``, HTML ``/`` ``/atlas`` ``/views/*`` stay **off**; backends (okstratr + CE APIs) still start. Optional external ``viewer.sh`` only if ``OKBAY_CE_EXTERNAL_VIEWER=1`` **and** HTML mode (side port ``OKBAY_CE_VIEWER_PORT``, default 8090).
 
@@ -103,12 +108,12 @@ okbay core-skills status
 curl -s http://127.0.0.1:8766/api/core-skills/status
 ```
 
-C1 shape: ``{ "ce": {...}, "okstratr": {...}, "wiki_build": {...} }``. Also embedded under ``health`` in ``/api/status`` / ``okbay status``.
+Response shape: ``{ "ce": {...}, "okstratr": {...}, "wiki_build": {...} }``. Also embedded under ``health`` in ``/api/status`` / ``okbay status``.
 
 Env overrides: ``OKBAY_OKSTRATR_UPSTREAM``, ``OKBAY_OKSTRATR_BIN``, ``OKBAY_CE_UPSTREAM``.
 
 ## Workspace agent cwd (not the code repo)
 
 Full-product and okstratr **Open in Herdr** seat agents on the active/selected
-okbay workspace path (BioCure tip under `Workspaces/`), never `/mnt/mac/okbay`.
+okbay workspace path, never the okbay source checkout (`OKBAY_SRC`).
 See okstratr `docs/DESK-KERNEL.md` § Open in Herdr.

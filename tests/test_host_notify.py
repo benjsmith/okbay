@@ -1,4 +1,4 @@
-"""okstratr.host_notify → Herdr stub I/O (contract C2)."""
+"""okstratr.host_notify → Herdr stub I/O."""
 from __future__ import annotations
 
 import io

@@ -77,7 +77,7 @@ BarWidget {
   }
 
   function runAtlasLauncher(urlOverride) {
-    // Charter Phase 5a: skip Chromium when QML viewer owns the surface.
+    // Skip Chromium when the QML viewer owns the surface.
     if (!root.htmlUiEnabled) {
       console.log("okbay: viewer_mode=qml — HTML atlas launcher suppressed")
       root.summonOkbay('{"surface":"panel"}')
