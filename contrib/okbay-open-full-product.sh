@@ -773,10 +773,20 @@ if panes:
     log "could not resolve shell pane for agent start"
     return 0
   fi
-  log "herdr agent start grok pane=$pane_id cwd=$cwd"
-  if ! herdr agent start grok --kind grok --pane "$pane_id" >>"$LOG" 2>&1; then
-    log "herdr agent start grok failed; trying seated fallback via okstratr"
-    PYTHONPATH="$pypath" OKSTRATR_HERDR_PANE="$pane_id" OKSTRATR_SEAT_CWD="$cwd" python3 - <<'PY' >>"$LOG" 2>&1 || true
+  # Herdr agent names are global across Herdr workspaces, so a second
+  # workspace can't reuse "grok"; fall back to a name with the workspace label.
+  local agent_name="grok" alt_name
+  alt_name="grok-$(printf '%s' "$label" | tr -c 'A-Za-z0-9-' '-')"
+  log "herdr agent start $agent_name pane=$pane_id cwd=$cwd"
+  if ! herdr agent start "$agent_name" --kind grok --pane "$pane_id" >>"$LOG" 2>&1; then
+    agent_name="$alt_name"
+    log "herdr agent start grok failed; retrying as $agent_name"
+    if herdr agent start "$agent_name" --kind grok --pane "$pane_id" >>"$LOG" 2>&1; then
+      return 0
+    fi
+    log "herdr agent start $agent_name failed; trying seated fallback via okstratr"
+    PYTHONPATH="$pypath" OKSTRATR_HERDR_PANE="$pane_id" OKSTRATR_SEAT_CWD="$cwd" \
+      OKBAY_HERDR_AGENT_NAME="$agent_name" python3 - <<'PY' >>"$LOG" 2>&1 || true
 import os, sys
 sys.path[:0] = [p for p in os.environ.get("PYTHONPATH", "").split(":") if p]
 try:
@@ -784,7 +794,7 @@ try:
     seat = h.resolve_seat_kind(node_id="full-product", role="worker", prefer_harness="grok", require_installed=True)
     kind = (seat.get("herdr_kind") or "grok").strip() or "grok"
     pane = os.environ["OKSTRATR_HERDR_PANE"]
-    name = kind
+    name = os.environ.get("OKBAY_HERDR_AGENT_NAME") or kind
     bin_path = h.herdr_bin()
     if not bin_path:
         print({"ok": False, "error": "no herdr"})
