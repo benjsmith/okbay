@@ -22,6 +22,8 @@ def daemon(tmp_path_factory):
     env = os.environ.copy()
     env["OKBAY_WORKSPACE"] = str(ws)
     env["XDG_STATE_HOME"] = str(state)
+    # Don't spawn a real okstratr on :8767 that outlives the test.
+    env["OKBAY_AUTOSTART_OKSTRATR"] = "0"
     env["PYTHONPATH"] = str(ROOT / "src") + os.pathsep + env.get("PYTHONPATH", "")
     proc = subprocess.Popen([sys.executable, "-m", "okbay", "serve", "--host", "127.0.0.1", "--port", str(port)], env=env, cwd=str(ROOT))
     base = f"http://127.0.0.1:{port}"
