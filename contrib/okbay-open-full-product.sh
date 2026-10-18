@@ -22,9 +22,10 @@
 # Env knobs:
 #   OKBAY_FULL_PRODUCT_WS   workspace target: "next-empty" (default), a number,
 #                           or "special:okbay"
-#   OKBAY_WORKSPACE         wiki/vault root to open (default: the workspace
-#                           okbay last served, from ~/.local/state/okbay/workspace,
-#                           else whatever okbayd is serving now)
+#   OKBAY_WORKSPACE         wiki/vault root to open when okbay has no chosen
+#                           workspace yet. Like okbayd, the opener prefers the
+#                           workspace picked with `okbay workspace use` or
+#                           `okbay setup` (~/.local/state/okbay/workspace).
 #   OKBAY_SRC               okbay source checkout, used when the okbay CLI is
 #                           not on PATH (default ~/src/okbay)
 #   OKSTRATR_SRC            okstratr source checkout (default ~/src/okstratr)
@@ -91,10 +92,11 @@ is_okbay_code_repo() {
   return 1
 }
 
-# Workspace to open: OKBAY_WORKSPACE, else the one okbay last served.
+# Workspace to open, in the same order okbayd uses: the workspace chosen with
+# `okbay workspace use` / `okbay setup`, else OKBAY_WORKSPACE.
 resolve_default_workspace() {
   local cand
-  for cand in "${OKBAY_WORKSPACE:-}" "$(cat "$OKBAY_STATE_WORKSPACE" 2>/dev/null || true)"; do
+  for cand in "$(cat "$OKBAY_STATE_WORKSPACE" 2>/dev/null || true)" "${OKBAY_WORKSPACE:-}"; do
     [[ -n "$cand" && -d "$cand" ]] || continue
     is_okbay_code_repo "$cand" && continue
     printf '%s\n' "$cand"
@@ -184,11 +186,9 @@ PY
   return 1
 }
 
-# Default OKBAY_WORKSPACE to the workspace okbay last served.
-if [[ -z "${OKBAY_WORKSPACE:-}" ]]; then
-  if WS_RESOLVED="$(resolve_default_workspace 2>/dev/null)"; then
-    export OKBAY_WORKSPACE="$WS_RESOLVED"
-  fi
+# A session-wide OKBAY_WORKSPACE must not undo a later `okbay workspace use`.
+if WS_RESOLVED="$(resolve_default_workspace 2>/dev/null)"; then
+  export OKBAY_WORKSPACE="$WS_RESOLVED"
 fi
 # resolve_nautilus_path uses it first.
 if [[ -n "${OKBAY_WORKSPACE:-}" ]]; then

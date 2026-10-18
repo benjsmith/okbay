@@ -12,8 +12,8 @@ Wallpapers are replaced by the v22 set under the same file names.
   panel bottom right. Super+Ctrl+K does the same on a Mac host that captures
   Super+Shift+K. Atlas alone is still `contrib/okbay-open-atlas.sh`; rebind
   Super+Shift+K to it in `~/.config/hypr/bindings.lua` to keep the old
-  behaviour. The opener uses `OKBAY_WORKSPACE`, or the workspace okbay last
-  served; `OKBAY_SRC` and `OKSTRATR_SRC` point it at source checkouts when the
+  behaviour. The opener opens the workspace okbay is set to (the one chosen
+  with `okbay workspace use` or `okbay setup`, else `OKBAY_WORKSPACE`); `OKBAY_SRC` and `OKSTRATR_SRC` point it at source checkouts when the
   CLIs aren't installed. Herdr agents are never started inside the okbay
   source checkout.
 - **okbay starts okstratr.** `okbay serve` starts `okstratr serve` on `:8767`
