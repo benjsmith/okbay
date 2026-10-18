@@ -253,3 +253,46 @@ def test_status_snapshot_includes_health(autostart_env, monkeypatch):
     payload = status.compute(env["ws"])
     assert "health" in payload
     assert payload["health"]["ce"]["state"] == "healthy"
+
+
+def test_okstratr_start_waits_for_starting_process(autostart_env, monkeypatch):
+    """A slow okstratr that is still starting is not joined by a second one."""
+    import os
+
+    oks = autostart_env["oks"]
+    oks.pid_path().write_text(f"{os.getpid()}\n", encoding="utf-8")
+    monkeypatch.setattr(oks, "is_healthy", lambda **_: False)
+    spawned = []
+    monkeypatch.setattr(oks.subprocess, "Popen", lambda *a, **k: spawned.append(a) or None)
+
+    out = oks.start(autostart_env["ws"])
+    assert out["starting"] is True
+    assert out["pid"] == os.getpid()
+    assert spawned == []
+
+
+def test_okstratr_start_replaces_stuck_process(autostart_env, monkeypatch):
+    """Past the grace period an unhealthy okstratr is stopped and respawned."""
+    import os
+
+    oks = autostart_env["oks"]
+    oks.pid_path().write_text("424242\n", encoding="utf-8")
+    old = oks.time.time() - oks._START_GRACE_SEC - 5
+    os.utime(oks.pid_path(), (old, old))
+    monkeypatch.setattr(oks, "_pid_alive", lambda pid: pid == 424242)
+    stopped = []
+    monkeypatch.setattr(oks, "stop", lambda: stopped.append(True) or {"ok": True})
+    monkeypatch.setattr(oks, "is_healthy", lambda **_: False)
+
+    class _Proc:
+        pid = 31337
+        returncode = 1
+
+        def poll(self):
+            return 1
+
+    monkeypatch.setattr(oks.subprocess, "Popen", lambda *a, **k: _Proc())
+    out = oks.start(autostart_env["ws"])
+    assert stopped == [True]
+    assert out["ok"] is False
+    assert "exited early" in out["error"]

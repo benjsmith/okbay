@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,13 @@ _PID_NAME = "okstratr.pid"
 _LOG_NAME = "okstratr.log"
 _HEALTH_PATH = "/health"
 _POLL_SEC = 5.0
+# How long a spawned okstratr may take to answer /health before it is
+# treated as stuck and replaced. Slow machines need well over 15 s.
+_START_GRACE_SEC = 90.0
 _DEFAULT_UPSTREAM = "http://127.0.0.1:8767"
+
+# The start-up thread and the keep-alive poller both call start().
+_START_LOCK = threading.Lock()
 
 _STATE: dict[str, Any] = {
     "state": "stopped",  # starting|healthy|unhealthy|stopped
@@ -107,6 +114,13 @@ def _read_pid() -> int | None:
         return None
 
 
+def _pid_file_age() -> float | None:
+    try:
+        return max(0.0, time.time() - pid_path().stat().st_mtime)
+    except OSError:
+        return None
+
+
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
@@ -161,6 +175,11 @@ def contract_slice() -> dict[str, Any]:
 
 def start(workspace: Path | None = None) -> dict[str, Any]:
     """Start okstratr serve if not healthy. Idempotent."""
+    with _START_LOCK:
+        return _start(workspace)
+
+
+def _start(workspace: Path | None = None) -> dict[str, Any]:
     if is_healthy():
         _set_state("healthy", "already running")
         return {
@@ -172,13 +191,29 @@ def start(workspace: Path | None = None) -> dict[str, Any]:
             "pid": _read_pid(),
         }
 
-    _set_state("starting", "spawning okstratr serve")
     old = _read_pid()
-    if old and not _pid_alive(old):
+    if old and _pid_alive(old):
+        age = _pid_file_age()
+        if age is None or age < _START_GRACE_SEC:
+            # The okstratr we spawned is still starting: wait for it rather
+            # than starting another one on the same port.
+            _set_state("starting", f"waiting for okstratr serve pid={old}")
+            return {
+                "ok": False,
+                "starting": True,
+                "healthy": False,
+                "pid": old,
+                "url": upstream_base(),
+                "log": str(log_path()),
+            }
+        log.warning("okstratr pid=%s unhealthy after %.0fs; restarting", old, age)
+        stop()
+    elif old:
         try:
             pid_path().unlink(missing_ok=True)
         except OSError:
             pass
+    _set_state("starting", "spawning okstratr serve")
 
     host = upstream_host()
     port = upstream_port()
