@@ -209,7 +209,11 @@ ensure_okstratr_serve() {
   fi
   log "okstratr serve starting"
   if command -v okstratr >/dev/null 2>&1; then
-    nohup okstratr serve >>/tmp/okstratr-serve.log 2>&1 &
+    # Same host settings okbay's own okstratr supervisor uses, so the panel's
+    # Context label follows okbay's active workspace.
+    OKSTRATR_HOST=okbay OKSTRATR_HOSTED=okbay \
+      OKSTRATR_HOST_NOTIFY_URL="${OKBAY_URL}/api/okstratr/host-notify" \
+      nohup okstratr serve >>/tmp/okstratr-serve.log 2>&1 &
   elif command -v systemctl >/dev/null 2>&1; then
     systemctl --user start okstratr.service 2>/dev/null \
       || systemctl --user start okstratr-serve.service 2>/dev/null \
