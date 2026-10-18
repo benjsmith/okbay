@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+**Breaking:** Super+Shift+K now opens the full product on its own workspace
+instead of the Atlas window alone, and `okbay serve` now starts okstratr.
+Wallpapers are replaced by the v22 set under the same file names.
+
+- **Super+Shift+K opens the full product.** It switches to an empty Hyprland
+  workspace and lays out four windows in a 2x2 grid: Atlas top left, Nautilus
+  (on the workspace's wiki) top right, Herdr bottom left, and the okstratr
+  panel bottom right. Super+Ctrl+K does the same on a Mac host that captures
+  Super+Shift+K. Atlas alone is still `contrib/okbay-open-atlas.sh`; rebind
+  Super+Shift+K to it in `~/.config/hypr/bindings.lua` to keep the old
+  behaviour. The opener opens the workspace okbay is set to (the one chosen
+  with `okbay workspace use` or `okbay setup`, else `OKBAY_WORKSPACE`); `OKBAY_SRC` and `OKSTRATR_SRC` point it at source checkouts when the
+  CLIs aren't installed. Herdr agents are never started inside the okbay
+  source checkout.
+- **okbay starts okstratr.** `okbay serve` starts `okstratr serve` on `:8767`
+  and restarts it if it stops. Set `OKBAY_AUTOSTART_OKSTRATR=0` to turn this
+  off. `okbay core-skills status|ensure` and `GET /api/core-skills/status`
+  report CE and okstratr health.
+- **HTML or QML viewer, not both.** `okbay viewer status|set html|qml` and
+  `GET/POST /api/viewer` choose the viewer. In QML mode the HTML pages (`/`,
+  `/atlas`, `/views/*`) return 409 and the QML panels don't open Chromium; the
+  JSON API keeps working. The default stays `html`.
+- **okstratr harness settings from okbay.** `okbay harness
+  list|enable|disable|set|reload` and `/api/okstratr/harness*` read and edit
+  okstratr's harness list; okbay keeps no list of its own.
+- **okstratr notifications go to Herdr.** `POST /api/okstratr/host-notify` and
+  `okbay host-notify` append okstratr notifications to
+  `~/.local/state/okbay/herdr-notify.jsonl`.
+- **Wallpaper v22**: a starfield background with a sharper logo.
+
 - **Viewer source body**: `GET /api/atlas/source` (vault path sandbox) + views-shell renders source HTML; wiki↔source history preserved.
 - **Bar / menu**: left-click Atlas launcher; right-click Library `#view=library`; menu Library entry.
 - **Hypr OkbayAtlas**: `contrib/okbay-atlas.conf` + `install-okbay-atlas-rules.sh` / setup.sh → `hyprctl reload`.
@@ -34,3 +64,5 @@
 
 - First cut of the Omarchy plugin: QML surfaces + okbayd + CLI + MCP + three skills.
 - Workspace `~/Work/okbay`, port 8766, propose→review gate, Atlas overlay, standing desks.
+
+- Omarchy 0.56: float action=set tiles floating windows; arrange uses toggle-only + proven 2x2 recipe (live green on Mac Mini).

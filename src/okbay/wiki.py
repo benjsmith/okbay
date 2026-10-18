@@ -45,7 +45,7 @@ def _parse_front(raw: str) -> dict:
 def parse_page(path: Path) -> Page | None:
     try:
         raw = path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     stem = path.stem
     title = stem.replace("-", " ").title()
@@ -73,6 +73,9 @@ def list_pages(wiki_dir: Path | None = None) -> list[Page]:
         return []
     pages = []
     for p in sorted(wiki_dir.rglob("*.md")):
+        # Skip hidden files such as macOS "._name.md" resource forks.
+        if p.name.startswith("."):
+            continue
         page = parse_page(p)
         if page:
             pages.append(page)
@@ -214,6 +217,8 @@ def _build_stem_index(directory: Path) -> dict[str, Path]:
     idx: dict[str, Path] = {}
     if directory.exists():
         for p in directory.rglob("*.md"):
+            if p.name.startswith("."):
+                continue
             # Prefer first path for a stem; CE layout is wiki/<kind>/<stem>.md
             idx.setdefault(p.stem, p)
     return idx

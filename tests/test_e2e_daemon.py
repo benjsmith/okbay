@@ -13,6 +13,8 @@ def serve(tmp_path, monkeypatch):
     monkeypatch.setenv("OKBAY_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv("PYTHONPATH", str(ROOT / "src"))
+    # Don't spawn a real okstratr on :8767 that outlives the test.
+    monkeypatch.setenv("OKBAY_AUTOSTART_OKSTRATR", "0")
     port = _free_port()
     proc = subprocess.Popen([sys.executable, "-m", "okbay", "serve", "--port", str(port)], cwd=str(ROOT), env=os.environ.copy())
     base = f"http://127.0.0.1:{port}"

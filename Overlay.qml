@@ -16,12 +16,15 @@ Item {
   readonly property string statusPath: (Quickshell.env("HOME") || "") + "/.local/state/okbay/status.json"
   readonly property string apiUrl: (status && status.api_url) ? status.api_url : "http://127.0.0.1:8766"
   readonly property string atlasUrl: (status && status.atlas_url) ? status.atlas_url : (apiUrl + "/atlas")
+  readonly property bool htmlUiEnabled: !(status && status.html_ui_enabled === false)
   readonly property color themeFg: (typeof Color !== "undefined" && Color.foreground) ? Color.foreground : "#f2f2f2"
   readonly property color themeMuted: (typeof Color !== "undefined" && Color.dark_foreground) ? Color.dark_foreground : "#888888"
   readonly property color themeBg: (typeof Color !== "undefined" && Color.popups && Color.popups.background) ? Color.popups.background : "#e6111111"
   readonly property color themeBorder: (typeof Color !== "undefined" && Color.popups && Color.popups.border) ? Color.popups.border : "#44ffffff"
 
   function open(payloadJson) {
+    if (!root.htmlUiEnabled) { console.log("okbay: qml mode — HTML atlas off"); return }
+
     opened = true
     statusFile.reload()
     // Delegate focus-or-launch to helper (skip summon → avoid recursion).

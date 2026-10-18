@@ -25,9 +25,15 @@ Guest-ready file: `contrib/okbay-atlas.conf`. `contrib/setup.sh` (or
 sources it from `windows.conf` / `hyprland.conf`, then runs **`hyprctl reload`**.
 
 ```
+# Optional float (safe for solo + product). Do NOT force fullscreen —
+# Super+Shift+K full-product 2x2 must place floating quadrants.
 windowrulev2 = float, class:^(OkbayAtlas)$
-windowrulev2 = fullscreen, class:^(OkbayAtlas)$
 ```
+
+**Do not** add `windowrulev2 = fullscreen, class:^(OkbayAtlas)$` — it fights the
+tiled/product layout (arrange keeps float set; fullscreen re-covers the desktop).
+Super+Shift+K / `OKBAY_ATLAS_TILED=1` must not force fullscreen (no Chromium
+`--start-fullscreen`, no fullscreen windowrule).
 
 After a manual copy: `hyprctl reload`. Keybinds are untouched.
 
@@ -45,7 +51,7 @@ After a manual copy: `hyprctl reload`. Keybinds are untouched.
 okbay serve   # or systemctl --user start okbayd
 # wait for /health
 curl -s http://127.0.0.1:8766/health
-# Super+Shift+K → one fullscreen Chromium; repeat → focus, not second window
+# Super+Shift+K → full-product 2x2 (Atlas|Nautilus / Herdr|okstratr); not fullscreen cover
 # Click a graph node → modal <<1s after warm (check okbayd log / stem-index.json)
 ```
 
