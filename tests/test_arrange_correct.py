@@ -23,3 +23,29 @@ def test_quadrant_layout_constants_present():
     text = SRC.read_text()
     assert '"atlas"' in text and '"nautilus"' in text
     assert '"herdr"' in text and '"okstratr"' in text
+
+
+def _load():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("arrange", SRC)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_arrange_uses_opener_target_workspace(monkeypatch):
+    mod = _load()
+    monkeypatch.setenv("WS_TARGET", "2")
+    monkeypatch.delenv("OKBAY_FULL_PRODUCT_WS", raising=False)
+    assert mod.resolve_ws() == 2
+    monkeypatch.setenv("OKBAY_FULL_PRODUCT_WS", "next-empty")
+    assert mod.resolve_ws() == 2
+
+
+def test_arrange_has_no_unreachable_default_workspace(monkeypatch):
+    mod = _load()
+    monkeypatch.delenv("WS_TARGET", raising=False)
+    monkeypatch.delenv("OKBAY_FULL_PRODUCT_WS", raising=False)
+    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()))
+    assert mod.resolve_ws() == 1
+    assert '"12"' not in SRC.read_text()
