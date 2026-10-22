@@ -108,7 +108,7 @@ From `/usr/share/omarchy/default/hypr/bindings/tiling.lua` + hotkeys manual:
 
 | Action | Proposed chord | Layer | Notes |
 |--------|----------------|-------|-------|
-| Open full product (2x2 workspace) | **`Super + Shift + K`** (Mac alt: **`Super + Ctrl + K`**) | Hypr | **`contrib/okbay-open-full-product.sh`**: switch to next-empty / `OKBAY_FULL_PRODUCT_WS` / `special:okbay`, ensure okstratr serve, populate **TL Atlas · TR Nautilus · BL Herdr · BR okstratr** (not float-fullscreen over prior desktops). Installed to `~/.local/bin/okbay-open-full-product.sh`. Before this release Super+Shift+K opened Atlas alone; bind it to `contrib/okbay-open-atlas.sh` to keep that. Okstratr-only remains **Super+Shift+O**. |
+| Open full product (2x2 workspace) | **`Super + Shift + K`** (Mac alt: **`Super + Ctrl + K`**) | Hypr | **`contrib/okbay-open-full-product.sh`**: switch to the lowest empty workspace 1–10 (or `OKBAY_FULL_PRODUCT_WS` / `special:okbay`), ensure okstratr serve, populate **TL Atlas · TR Nautilus · BL Herdr · BR okstratr** (not float-fullscreen over prior desktops). Installed to `~/.local/bin/okbay-open-full-product.sh`. Before this release Super+Shift+K opened Atlas alone; bind it to `contrib/okbay-open-atlas.sh` to keep that. Okstratr-only remains **Super+Shift+O**. |
 | Open Reviews panel | *(already)* **`Super + Ctrl + 1`** | Hypr | Keep; document. Optional alias in Okbay menu only. |
 | **Focus search** | **`/`** (and optionally `Ctrl + F`) | Page | **Implemented.** Focus `#sidebar-search`, select-all if non-empty. Ignore when editable **except** Ctrl+F always (`preventDefault`). |
 | **Label mode cycle** | **`l`** | Page | **Implemented.** Cycle `auto → on → off` (`Controls.cycleMode`). |
