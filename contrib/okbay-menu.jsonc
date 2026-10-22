@@ -7,6 +7,7 @@
     { "label": "Curate",  "action": "okbay desk start curate" },
     { "label": "Work",    "action": "okbay desk start work" },
     { "label": "Code",    "action": "okbay desk start code" },
-    { "label": "Status",  "action": "okbay status" }
+    { "label": "Status",  "action": "okbay status" },
+    { "label": "Sign-in", "action": "okbay signin --focus" }
   ]
 }

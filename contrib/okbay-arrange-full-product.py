@@ -7,7 +7,26 @@ from __future__ import annotations
 import json, os, subprocess, sys, time
 
 LOG = os.environ.get("OKBAY_FULL_PRODUCT_LOG", "/tmp/okbay-full-product.log")
-WS = int(os.environ.get("OKBAY_FULL_PRODUCT_WS", "12") or 12)
+# Target workspace comes from the opener (WS_TARGET). Never fall back to a
+# fixed number: Omarchy only binds Super+1..0, so a workspace like 12 has no
+# key and the 2x2 panes look gone after Super+N and back.
+WS = 0
+
+
+def resolve_ws() -> int:
+    for key in ("WS_TARGET", "OKBAY_FULL_PRODUCT_WS"):
+        raw = str(os.environ.get(key) or "").strip()
+        if raw.isdigit() and int(raw) > 0:
+            return int(raw)
+    try:
+        out = subprocess.run(["hyprctl", "activeworkspace", "-j"], capture_output=True,
+                             text=True, timeout=3).stdout
+        wid = int((json.loads(out) or {}).get("id") or 0)
+        if wid > 0:
+            return wid
+    except Exception:
+        pass
+    return 1
 
 def log(*a):
     line = " ".join(str(x) for x in a)
@@ -160,9 +179,7 @@ def mon_geom():
 
 def main():
     global WS
-    raw = os.environ.get("OKBAY_FULL_PRODUCT_WS", str(WS))
-    if raw.isdigit():
-        WS = int(raw)
+    WS = resolve_ws()
     W, H, bar, tw, th = mon_geom()
     layout = {
         "atlas": (0, bar, tw, th),

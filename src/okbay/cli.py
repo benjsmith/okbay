@@ -12,6 +12,10 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("setup"); s.add_argument("--workspace")
     sub.add_parser("status")
+    si = sub.add_parser("signin", help="Show a pending grok sign-in code from Herdr panes again")
+    si.add_argument("--focus", action="store_true", help="Bring the Herdr pane and sign-in window forward")
+    si.add_argument("--restart", metavar="PANE_ID", help="Start a new grok login in PANE_ID if none is waiting")
+    si.add_argument("--json", action="store_true")
     se = sub.add_parser("search"); se.add_argument("query"); se.add_argument("--json", action="store_true")
     ing = sub.add_parser("ingest")
     ing.add_argument("path")
@@ -99,6 +103,9 @@ def main(argv=None):
     hrsub.add_parser("reload", help="Reload harnesses.toml on okstratr")
 
     args = p.parse_args(argv)
+    if args.cmd == "signin":
+        from .signin import main as signin_main
+        return signin_main(args)
     if args.cmd == "setup":
         from . import paths, status, graph
         ws_path = Path(args.workspace).expanduser() if args.workspace else paths.default_workspace()

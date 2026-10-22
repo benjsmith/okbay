@@ -31,6 +31,20 @@ Wallpapers are replaced by the v22 set under the same file names.
   `okbay host-notify` append okstratr notifications to
   `~/.local/state/okbay/herdr-notify.jsonl`.
 - **Wallpaper v22**: a starfield background with a sharper logo.
+- **Super+Shift+K picks the lowest empty workspace.** It looks at workspaces
+  1 to 10 and opens the 2x2 layout on the first one with no windows. If all
+  ten are in use it uses the current workspace.
+- **grok's sign-in window comes to the front.** `okbay signin` shows Herdr
+  panes waiting on a grok device sign-in, and `okbay signin --focus` floats,
+  centres and raises the "Device Sign-in" browser window above the 2x2 layout.
+  On Omarchy's Lua Hyprland config, `contrib/okbay-windows.lua` does this by
+  itself when the page opens; `setup.sh` installs it with
+  `contrib/install-okbay-windows.sh`.
+- **Atlas no longer leaves one node highlighted.** With nothing selected, the
+  graph engine treated its starting node (the best-connected page) as focused
+  and kept its edges highlighted after every rebuild. Atlas now clears that.
+- **Atlas shows node and edge counts once**, in the stats box at the top left
+  of the graph. The count text in the left panel is gone.
 
 - **Viewer source body**: `GET /api/atlas/source` (vault path sandbox) + views-shell renders source HTML; wiki↔source history preserved.
 - **Bar / menu**: left-click Atlas launcher; right-click Library `#view=library`; menu Library entry.

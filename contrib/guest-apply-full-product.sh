@@ -9,5 +9,8 @@ if [[ -f "$ROOT/contrib/okbay-atlas.conf" ]]; then
   mkdir -p "$HOME/.config/hypr"
   cp -f "$ROOT/contrib/okbay-atlas.conf" "$HOME/.config/hypr/okbay-atlas.conf"
 fi
+if [[ -x "$ROOT/contrib/install-okbay-windows.sh" ]]; then
+  "$ROOT/contrib/install-okbay-windows.sh" || true
+fi
 echo "APPLIED $(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 md5sum "$HOME/.local/bin/okbay-arrange-full-product.py" "$ROOT/contrib/okbay-arrange-full-product.py"

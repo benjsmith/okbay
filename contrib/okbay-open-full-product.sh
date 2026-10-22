@@ -20,8 +20,9 @@
 #        Bottom-right: okstratr panel
 #
 # Env knobs:
-#   OKBAY_FULL_PRODUCT_WS   workspace target: "next-empty" (default), a number,
-#                           or "special:okbay"
+#   OKBAY_FULL_PRODUCT_WS   workspace target: "next-empty" (default: the
+#                           lowest empty workspace 1-10), a number, or
+#                           "special:okbay"
 #   OKBAY_WORKSPACE         wiki/vault root to open when okbay has no chosen
 #                           workspace yet. Like okbayd, the opener prefers the
 #                           workspace picked with `okbay workspace use` or
@@ -519,32 +520,42 @@ PY
 }
 
 pick_workspace() {
+  # "next-empty" picks the lowest workspace from 1 to 10 with no windows, so
+  # the layout always lands on a workspace Super+1..0 can reach. When all ten
+  # are in use it stays on the current workspace.
   local want="${OKBAY_FULL_PRODUCT_WS:-next-empty}"
   if [[ "$want" == special:* || "$want" =~ ^[0-9]+$ ]]; then
     printf '%s\n' "$want"
     return 0
   fi
   if ! command -v hyprctl >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
-    printf '%s\n' "2"
+    printf '%s\n' "1"
     return 0
   fi
-  hyprctl clients -j 2>/dev/null | python3 -c '
-import json, sys
+  local clients active
+  clients="$(hyprctl clients -j 2>/dev/null || true)"
+  active="$(hyprctl activeworkspace -j 2>/dev/null || true)"
+  CLIENTS_JSON="$clients" ACTIVE_JSON="$active" python3 -c '
+import json, os
 try:
-    clients = json.load(sys.stdin)
+    clients = json.loads(os.environ.get("CLIENTS_JSON") or "[]")
 except Exception:
-    print(2); raise SystemExit
+    clients = []
 used = set()
-for c in clients:
+for c in clients if isinstance(clients, list) else []:
     try:
-        used.add(int(c.get("workspace", {}).get("id") or 0))
+        used.add(int((c.get("workspace") or {}).get("id") or 0))
     except Exception:
         pass
-for n in range(2, 12):
+for n in range(1, 11):
     if n not in used:
         print(n); raise SystemExit
-print(9)
-' 2>/dev/null || printf '%s\n' "2"
+try:
+    cur = int(json.loads(os.environ.get("ACTIVE_JSON") or "{}").get("id") or 0)
+except Exception:
+    cur = 0
+print(cur if 1 <= cur <= 10 else 1)
+' 2>/dev/null || printf '%s\n' "1"
 }
 
 switch_workspace() {

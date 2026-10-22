@@ -37,6 +37,14 @@ Super+Shift+K / `OKBAY_ATLAS_TILED=1` must not force fullscreen (no Chromium
 
 After a manual copy: `hyprctl reload`. Keybinds are untouched.
 
+Omarchy on Hyprland 0.56 uses a Lua config (`~/.config/hypr/hyprland.lua`) and
+does not read `.conf` rule files. There, `contrib/install-okbay-windows.sh`
+(run by `setup.sh`) copies `contrib/okbay-windows.lua` to `~/.config/hypr/` and
+adds `require("hypr.okbay-windows")` to `hyprland.lua`. It watches for grok's
+"Device Sign-in" browser page and floats, centres and raises that window so it
+isn't hidden behind the 2x2 layout. `okbay signin --focus` does the same by
+hand.
+
 ## Serve + views
 
 - Python daemon: `okbay serve` / `okbayd` on `:8766`
