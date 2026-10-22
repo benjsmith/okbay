@@ -56,10 +56,6 @@
     display: flex; justify-content: space-between; align-items: center;
     gap: 8px; min-height: 28px;
   }
-  #meta-counts {
-    color: var(--text-muted); font-size: 11px; font-weight: 400;
-    min-width: 5.5rem; text-align: right; flex: 0 0 auto;
-  }
   #sidebar-search {
     width: 100%; padding: 7px 10px; border-radius: 6px;
     border: 1px solid var(--line); background: var(--bg); color: var(--text);
@@ -451,7 +447,6 @@
           </button>
           <button id="atlas-help-btn" class="icon-btn" type="button" title="Keybindings (?)" aria-label="Keybindings help">?</button>
         </span>
-        <span id="meta-counts"></span>
       </div>
       <div class="sidebar-search-wrap">
         <input id="sidebar-search" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false"/>
@@ -588,9 +583,27 @@
   var graphEl = document.getElementById('graph');
   var handle = null;
   var ceData = null;
+  // Node and edge counts for the box at the top left of the graph. Messages
+  // (loading, toasts, errors) replace it for a while; setStatus('') brings
+  // the counts back.
+  var statsText = '';
+
+  function formatStats(nodes, edges) {
+    var n = Number(nodes) || 0;
+    var e = Number(edges) || 0;
+    return n.toLocaleString('en-US') + ' nodes · ' + e.toLocaleString('en-US') + ' edges';
+  }
 
   function setStatus(msg, isError, isLoading) {
     if (!statusEl) return;
+    if (!msg && statsText) {
+      statusEl.classList.remove('error', 'is-loading', 'focus-toast');
+      statusEl.classList.add('is-stats');
+      statusEl.style.display = '';
+      statusEl.textContent = statsText;
+      return;
+    }
+    statusEl.classList.remove('is-stats');
     statusEl.classList.toggle('error', !!isError);
     var loading = !!isLoading && !!msg && !isError;
     statusEl.classList.toggle('is-loading', loading);
@@ -795,10 +808,7 @@
     setStatus('Opening Atlas', false, true);
     var nodes = Array.isArray(ceData.nodes) ? ceData.nodes : [];
     var corpusSize = nodes.length || (ceData.pages ? Object.keys(ceData.pages).length : 0);
-    var counts = document.getElementById('meta-counts');
-    if (counts) {
-      counts.textContent = corpusSize + ' · ' + ((ceData.edges || []).length) + ' links';
-    }
+    statsText = formatStats(corpusSize, (ceData.edges || []).length);
 
     var viewerMode = resolveViewer();
     document.body.dataset.viewer = viewerMode;
@@ -844,7 +854,7 @@
         api: api,
         onViewChange: function (id) {
           document.title = 'OKBay · ' + id;
-          if (id === 'atlas') setStatus('OKBay Atlas · ' + corpusSize + ' nodes');
+          if (id === 'atlas') setStatus('');
         }
       });
     }
@@ -909,7 +919,8 @@
             OkbayAtlasChrome.Controls.applyMinimapPref();
             var mm = document.querySelector('canvas.atlas-minimap');
             document.documentElement.dataset.atlasMinimap = mm ? (mm.hidden ? 'hidden' : 'visible') : 'missing';
-            setStatus('scene-ready · nodes=' + s.nodeCount + ' edges=' + s.edgeCount + ' · minimap=' + (document.documentElement.dataset.atlasMinimap || '?'));
+            statsText = formatStats(s.nodeCount, s.edgeCount);
+            if (!statusEl || statusEl.classList.contains('is-stats') || statusEl.style.display === 'none') setStatus('');
           }
         });
       } catch (e) {
@@ -960,10 +971,7 @@
       applyHash();
     }
 
-    setStatus('OKBay ' + (viewerMode === 'classic' ? 'Graph' : 'Atlas') + ' · ' + corpusSize + ' nodes');
-    setTimeout(function () {
-      if (statusEl && !statusEl.classList.contains('error')) setStatus('');
-    }, 3500);
+    if (!statusEl || !statusEl.classList.contains('error')) setStatus('');
   }
 
   setInterval(loadTheme, 4000);
