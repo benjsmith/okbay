@@ -35,3 +35,44 @@ def test_cli_has_signin():
     from okbay import cli
     with pytest.raises(SystemExit):
         cli.main(["signin", "--help"])
+
+
+def _capture(monkeypatch, clients):
+    sent = []
+    monkeypatch.setattr(signin, "_hypr_clients", lambda: clients)
+    monkeypatch.setattr(signin, "_run", lambda cmd, timeout=5.0: sent.append(cmd[2]) or "")
+    monkeypatch.setenv("HYPRLAND_INSTANCE_SIGNATURE", "test")
+    return sent
+
+
+SIGNIN_TILED = {"address": "0xs", "class": "chromium", "floating": False,
+                "title": "Device Sign-in | SpaceXAI Accounts - Chromium"}
+HERDR = {"address": "0xh", "class": "herdr", "floating": True, "title": "omarchy: biocure"}
+
+
+def test_focus_floats_and_raises_tiled_signin_window(monkeypatch):
+    sent = _capture(monkeypatch, [HERDR, SIGNIN_TILED])
+    done = signin.focus([], herdr="")
+    assert done == ["herdr window", "sign-in window"]
+    assert sent == [
+        'hl.dsp.focus({ window = "address:0xh" })',
+        'hl.dsp.window.float({ action = "toggle", window = "address:0xs" })',
+        'hl.dsp.window.resize({ x = 960, y = 760, relative = false, window = "address:0xs" })',
+        'hl.dsp.window.center({ window = "address:0xs" })',
+        'hl.dsp.focus({ window = "address:0xs" })',
+        'hl.dsp.window.bring_to_top({ window = "address:0xs" })',
+    ]
+
+
+def test_focus_leaves_floating_signin_window_floating(monkeypatch):
+    sent = _capture(monkeypatch, [dict(SIGNIN_TILED, floating=True)])
+    signin.focus([], herdr="")
+    assert not any("float(" in s for s in sent)
+    assert sent[-1] == 'hl.dsp.window.bring_to_top({ window = "address:0xs" })'
+
+
+def test_other_sign_in_pages_are_not_touched(monkeypatch):
+    sent = _capture(monkeypatch, [{"address": "0xg", "class": "chromium", "floating": False,
+                                   "title": "Sign in - Google Accounts - Chromium"}])
+    assert signin.focus([], herdr="") == []
+    assert sent == []

@@ -17,7 +17,9 @@ from pathlib import Path
 CODE_RE = re.compile(r"\b([A-Z0-9]{4}-[A-Z0-9]{4})\b")
 URL_RE = re.compile(r"https://\S+")
 PENDING_MARKERS = ("Approve in your browser", "Waiting for approval", "Make sure your browser shows this code")
-SIGNIN_TITLE_MARKERS = ("Device Sign-in", "Sign in")
+# grok's device sign-in page is titled "Device Sign-in | ... Accounts".
+SIGNIN_TITLE_PREFIX = "Device Sign-in"
+SIGNIN_SIZE = (960, 760)
 
 
 def herdr_bin() -> str | None:
@@ -87,8 +89,35 @@ def _hypr_clients() -> list[dict]:
         return []
 
 
+def _hypr_dispatch(expr: str) -> None:
+    _run(["hyprctl", "dispatch", expr])
+
+
 def _hypr_focus_window(addr: str) -> None:
-    _run(["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{addr}" }})'])
+    _hypr_dispatch(f'hl.dsp.focus({{ window = "address:{addr}" }})')
+
+
+def find_signin_window(clients: list[dict]) -> dict | None:
+    """The browser window showing grok's device sign-in page, if any."""
+    return next((c for c in clients if (c.get("title") or "").startswith(SIGNIN_TITLE_PREFIX)), None)
+
+
+def raise_signin_window(win: dict) -> None:
+    """Float, centre and raise the sign-in window above the okbay layout.
+
+    Omarchy tiles browser windows and the okbay 2x2 layout floats its four
+    windows, so a tiled sign-in window sits underneath them. "toggle" is used
+    rather than action = "set" because "set" can tile an already floating
+    window on Omarchy's Hyprland 0.56.
+    """
+    sel = f'"address:{win["address"]}"'
+    if not win.get("floating"):
+        w, h = SIGNIN_SIZE
+        _hypr_dispatch(f'hl.dsp.window.float({{ action = "toggle", window = {sel} }})')
+        _hypr_dispatch(f'hl.dsp.window.resize({{ x = {w}, y = {h}, relative = false, window = {sel} }})')
+        _hypr_dispatch(f'hl.dsp.window.center({{ window = {sel} }})')
+    _hypr_dispatch(f'hl.dsp.focus({{ window = {sel} }})')
+    _hypr_dispatch(f'hl.dsp.window.bring_to_top({{ window = {sel} }})')
 
 
 def focus(pending: list[dict], herdr: str | None = None) -> list[str]:
@@ -104,13 +133,14 @@ def focus(pending: list[dict], herdr: str | None = None) -> list[str]:
         return done
     clients = _hypr_clients()
     herdr_win = next((c for c in clients if (c.get("class") or "").lower() == "herdr"), None)
-    signin_win = next((c for c in clients
-                       if any(m in (c.get("title") or "") for m in SIGNIN_TITLE_MARKERS)
-                       and "chrom" in (c.get("class") or "").lower()), None)
-    for win, name in ((herdr_win, "herdr window"), (signin_win, "sign-in window")):
-        if win and win.get("address"):
-            _hypr_focus_window(win["address"])
-            done.append(name)
+    signin_win = find_signin_window(clients)
+    if herdr_win and herdr_win.get("address"):
+        _hypr_focus_window(herdr_win["address"])
+        done.append("herdr window")
+    # The sign-in window goes last so it ends up focused and on top.
+    if signin_win and signin_win.get("address"):
+        raise_signin_window(signin_win)
+        done.append("sign-in window")
     return done
 
 

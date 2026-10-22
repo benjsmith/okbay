@@ -85,6 +85,11 @@ if [ -f "$REPO_ROOT/contrib/okbay-atlas.conf" ]; then
     echo "==> installed ~/.config/hypr/okbay-atlas.conf — run: hyprctl reload"
   fi
 fi
+# Lua Hyprland configs (Omarchy, Hyprland 0.56+) do not read okbay-atlas.conf;
+# okbay-windows.lua brings grok's sign-in window above the 2x2 layout there.
+if [ -x "$REPO_ROOT/contrib/install-okbay-windows.sh" ]; then
+  "$REPO_ROOT/contrib/install-okbay-windows.sh" || true
+fi
 # Also keep contrib scripts next to the plugin copy.
 if [ -f "$REPO_ROOT/contrib/okbay-atlas.conf" ]; then
   install -m 0644 "$REPO_ROOT/contrib/okbay-atlas.conf"     "$HOME/.config/omarchy/plugins/benjsmith.okbay/contrib/okbay-atlas.conf"

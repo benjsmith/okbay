@@ -85,6 +85,7 @@ contrib/setup.sh       visible installer
 contrib/okbay-open-full-product.sh  Super+Shift+K full product 2x2 workspace (Atlas|Nautilus/Herdr|okstratr; Ctrl+K Mac alt)
 contrib/okbay-open-atlas.sh  Atlas Chromium focus-or-launch (used by full-product)
 contrib/hypr-bindings.lua    Hyprland bind snippet
+contrib/okbay-windows.lua    brings the grok sign-in browser window to the front (Lua Hyprland)
 contrib/okbayd.service systemd --user
 contrib/mcp_server.py  stdio MCP
 skills/                okbay-ask, okbay-curate, okbay-desk
